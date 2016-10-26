@@ -19,7 +19,7 @@ There are currently 3 "usable" functions:
 * processSuppa
 * processRMATS
 
-Each are documented in the "processing_functions.R" file. An example of usage is the following:
+Each are documented in the "processing_functions.R" file. It is very likely you will have to hack these functions to make them work with your particular output files in the sense that I have not generalized the variable names in the output files. Anyway, an example of usage is the following:
 
 ```R
 source("processing_functions.R")
