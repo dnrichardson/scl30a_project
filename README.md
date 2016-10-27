@@ -37,3 +37,9 @@ myRmatsGenes <- lapply(rmats_inputList, processRMATS, 0.05, 0.2, events = FALSE)
 
 
 ```
+
+Note to self: The suppa event ID takes the following form:
+
+```
+<gene_id>;<event-type>:<seqname>:<coordinates-of-the-event>:<strand>
+```
