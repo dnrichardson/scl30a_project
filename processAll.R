@@ -9,6 +9,7 @@ library(dplyr)
 library(ggplot2)
 library(VennDiagram)
 library(plyr)
+library(tidyr)
 
 dir_prefix <- "~/Dropbox/Current/newscl30a/"
 
@@ -106,8 +107,8 @@ forVennRmats <- finalTableEventsR$GeneID
 forVennSuppa <- finalTableEventsSu$GeneID        
 forVennSpladder <- finalTableEventsSp$GeneID
 
-venn.diagram(list(rMATS=forVennRmats, SUPPA=forVennSuppa, SplAdder=forVennSpladder), filename = "3way_genes.png",
-             imagetype = "png", main = "Overlapping genes across programs", sub = "All Event Types",
+venn.diagram(list(rMATS=forVennRmats, SUPPA=forVennSuppa, SplAdder=forVennSpladder), filename = "3way_genes_updated.png",
+             imagetype = "png", main = "Overlapping genes across programs", sub = "All Event Types, heuritistic filter on reps",
              col = "transparent",
              fill = c("cornflowerblue", "green", "darkorchid1"), force.unique = TRUE)
 
@@ -133,7 +134,7 @@ write.table(onlyrMats_suppa_table, file = "AllEvents_ranked_by_dPSI_only_rmats_s
 write.table(onlySuppa_rmats_table, file = "AllEvents_ranked_by_dPSI_only_suppa_rmats.txt", quote = FALSE, sep = "\t", 
             row.names = FALSE)
 
-## Sanity check, unique genes should be 358
+## Sanity check, unique genes should be 223
 length(unique(onlyrMats_suppa_table$GeneID))
 length(unique(onlySuppa_rmats_table$GeneID))
 
@@ -143,3 +144,19 @@ write.table(commonAcross3, file = "commonAcross3.txt", quote = FALSE, row.names 
 write.table(rmats_suppa, file = "rmats_suppa.txt", quote = FALSE, row.names = FALSE)
 write.table(rmats_spladder, file = "rmats_spladder.txt", quote = FALSE, row.names = FALSE)
 write.table(suppa_spladder, file = "suppa_spladder.txt", quote = FALSE, row.names = FALSE)
+
+## Pull out the genes common across all 3 programs, with each program's output
+
+common10.rMATS <- finalTableEventsR[finalTableEventsR$GeneID %in% commonAcross3,]
+common10.spladder <- finalTableEventsSp[finalTableEventsSp$GeneID %in% commonAcross3,]
+common10.suppa <- finalTableEventsSu[finalTableEventsSu$GeneID %in% commonAcross3,]
+
+write.table(common10.rMATS, file = "AllEvents_ranked_by_dPSI_common10.rmats.txt", quote = FALSE, sep = "\t", 
+            row.names = FALSE)
+
+write.table(common10.spladder, file = "AllEvents_ranked_by_dPSI_common10.spladder.txt", quote = FALSE, sep = "\t", 
+            row.names = FALSE)
+
+write.table(common10.suppa, file = "AllEvents_ranked_by_dPSI_common10.suppa.txt", quote = FALSE, sep = "\t", 
+            row.names = FALSE)
+
