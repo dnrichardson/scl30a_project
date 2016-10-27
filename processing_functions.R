@@ -34,8 +34,10 @@ processSpladder <- function (mergeGraphFile, testResultsFile, fdr = 0.05, dpsi =
         
         ## Read in the spladder_test.py results files
         dAS <- tbl_df(read.table(testResultsFile, stringsAsFactors = FALSE, header = TRUE)) %>% 
-                select(event_id, gene, p_val_adj) %>%
+                dplyr::rename(GeneID = gene) %>%
+                select(event_id, GeneID, p_val_adj) %>%
                 filter(p_val_adj < fdr)
+                
         
         ## Take note of the AS type for file-naming purposes
         
@@ -48,13 +50,15 @@ processSpladder <- function (mergeGraphFile, testResultsFile, fdr = 0.05, dpsi =
                 ASType <- unlist(strsplit(mergeGraphFile, split = "\\." ))[1]
         }
         
-        ## Join the matching rows based on event_id
+        ## Join the matching rows based on event_id, filter with a heuristic to discard rows where difference
+        ## between the replicates is greater than the delta psi. This is to ensure that our replicates agree
+        
         eventswithdPSI <- inner_join(confirmedEvents, dAS, by = "event_id") %>%
-                select(event_id, gene, atRWT2S.psi, atRWT3S.psi, atRKO1S.psi, atRKO3S.psi, dPSI, p_val_adj) %>% 
-                filter(abs(dPSI) > dpsi)
+                select(event_id, GeneID, atRWT2S.psi, atRWT3S.psi, atRKO1S.psi, atRKO3S.psi, dPSI, p_val_adj) %>% 
+                filter(abs(dPSI) > dpsi, abs(dPSI) > abs(atRWT2S.psi - atRWT3S.psi) & abs(dPSI) > abs(atRKO1S.psi - atRKO3S.psi) )
         
         ## Get a genewise list of unique ids
-        uniqGenes <- distinct(eventswithdPSI, gene, .keep_all = TRUE)
+        uniqGenes <- distinct(eventswithdPSI, GeneID, .keep_all = TRUE)
         
         ## Write both to files
         if (outfile == TRUE){
@@ -114,17 +118,18 @@ processSuppa <- function (dpsifile, psivecfile, fdr, dpsi = "", outfile = FALSE,
                 dplyr::filter(V3 < fdr & abs(V2) > dpsi ) %>%
                 dplyr::mutate(geneID = sapply(strsplit(V1, ";"), "[", 1)) %>%
                 dplyr::distinct(geneID, .keep_all = TRUE) %>%
-                dplyr::rename(FDR = V3, dPSI = V2, event = V1)
+                dplyr::rename(FDR = V3, dPSI = V2, event = V1, GeneID = geneID)
         
         allEvents <- dPSIs %>%
                 dplyr::filter(V3 < fdr & abs(V2) > dpsi ) %>%
-                dplyr::mutate(geneID = sapply(strsplit(V1, ";"), "[", 1)) %>%
+                dplyr::mutate(GeneID = sapply(strsplit(V1, ";"), "[", 1)) %>%
                 dplyr::rename(FDR = V3, dPSI = V2, event = V1)
         
         ## Join the matching rows based on event_id
         eventswithdPSI <- inner_join(allEvents, psivecs, by = "event") %>%
-                dplyr::select(event, geneID, atRWT2S.psi, atRWT3S.psi, atRKO1S.psi, atRKO3S.psi, dPSI, FDR) %>% 
-                dplyr::filter(abs(dPSI) > dpsi)
+                dplyr::select(event, GeneID, atRWT2S.psi, atRWT3S.psi, atRKO1S.psi, atRKO3S.psi, dPSI, FDR) %>% 
+                dplyr::filter(abs(dPSI) > dpsi, abs(dPSI) > abs(atRWT2S.psi - atRWT3S.psi) & abs(dPSI) > abs(atRKO1S.psi - atRKO3S.psi) )
+        
         
         if (outfile == TRUE){
                 write.table(eventswithdPSI, file = paste(ASType,"fdr", fdr, "dpsi", dpsi, "events.txt", sep = "_"),
@@ -160,6 +165,8 @@ processRMATS <- function (myfile, fdr = 0.05, dpsi = "", outfile = FALSE, events
         #       dirs: if TRUE, take the path into consideration when parsing out the "ASType"
         #               only use this if your input files to this function are not in the same working directory
         
+        # TO DO: break apart inclusion levels into separate variables
+        
         
         dPSIs <- tbl_df(read.table(myfile, header = TRUE, sep = "\t", stringsAsFactors = FALSE,
                                    quote = "\""))
@@ -180,11 +187,13 @@ processRMATS <- function (myfile, fdr = 0.05, dpsi = "", outfile = FALSE, events
         
         allEvents <- dPSIs %>%
                 filter(FDR < fdr & abs(IncLevelDifference) > dpsi ) %>% 
-                dplyr::select(GeneID, ID, FDR:IncLevelDifference) 
+                dplyr::select(GeneID, ID, FDR:IncLevelDifference)
         
         allEvents$Type <- ASType
         
-        allEvents <- dplyr::select(allEvents, GeneID, ID, Type, FDR:IncLevelDifference)
+        allEvents <- dplyr::select(allEvents, GeneID, ID, Type, FDR:IncLevelDifference) %>% 
+                separate(IncLevel1, into = c("atRWT2S.psi", "atRWT3S.psi"), sep = ",") %>%
+                separate(IncLevel2, into = c("atRKO1S.psi", "atRKO3S.psi"), sep = ",")
         
         if (outfile == TRUE){
                 write.table(uniqIDs, file = paste(ASType,"fdr", fdr, "dpsi", dpsi, "uniq.genes.txt", sep = "_"),
