@@ -70,7 +70,8 @@ processSpladder <- function (mergeGraphFile, testResultsFile, fdr = 0.05, dpsi =
                 ASType <- tail(unlist(strsplit(tmp, split = "/", fixed = TRUE)), n = 1)
                 ASType <- gsub("merge_graphs_", "", ASType)
                 ASType <- gsub("_C3", "", ASType)
-        } else{
+        } else
+                {
                 ASType <- unlist(strsplit(mergeGraphFile, split = "\\." ))[1]
                 ASType <- gsub("merge_graphs_", "", ASType)
                 ASType <- gsub("_C3", "", ASType)
