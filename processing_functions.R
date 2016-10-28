@@ -147,11 +147,11 @@ processSuppa <- function (dpsifile, psivecfile, fdr, dpsi = "", outfile = FALSE,
                 ASType <- unlist(strsplit(dpsifile, split = "\\_" ))[2] %>% gsub(".dpsi", "",.)
         }
         
-        uniqIDs <- dPSIs %>%
-                dplyr::filter(V3 < fdr & abs(V2) > dpsi ) %>%
-                dplyr::mutate(geneID = sapply(strsplit(V1, ";"), "[", 1)) %>%
-                dplyr::distinct(geneID, .keep_all = TRUE) %>%
-                dplyr::rename(FDR = V3, dPSI = V2, event = V1, GeneID = geneID)
+        # uniqIDs <- dPSIs %>%
+        #         dplyr::filter(V3 < fdr & abs(V2) > dpsi ) %>%
+        #         dplyr::mutate(geneID = sapply(strsplit(V1, ";"), "[", 1)) %>%
+        #         dplyr::distinct(geneID, .keep_all = TRUE) %>%
+        #         dplyr::rename(FDR = V3, dPSI = V2, event = V1, GeneID = geneID)
         
         allEvents <- dPSIs %>%
                 dplyr::filter(V3 < fdr & abs(V2) > dpsi ) %>%
@@ -165,6 +165,7 @@ processSuppa <- function (dpsifile, psivecfile, fdr, dpsi = "", outfile = FALSE,
                 dplyr::select(event, Type, GeneID, atRWT2S.psi, atRWT3S.psi, atRKO1S.psi, atRKO3S.psi, dPSI, FDR) %>% 
                 dplyr::filter(abs(dPSI) > dpsi, abs(dPSI) > abs(atRWT2S.psi - atRWT3S.psi) & abs(dPSI) > abs(atRKO1S.psi - atRKO3S.psi) )
         
+        uniqIDs <- eventswithdPSI %>% distinct(GeneID, .keep_all = TRUE)
         
         if (outfile == TRUE){
                 write.table(eventswithdPSI, file = paste(ASType,"fdr", fdr, "dpsi", dpsi, "events.txt", sep = "_"),
@@ -215,10 +216,14 @@ processRMATS <- function (myfile, fdr = 0.05, dpsi = "", outfile = FALSE, events
         }
         
         
-        uniqIDs <- dPSIs %>%
-                filter(FDR < fdr & abs(IncLevelDifference) > dpsi ) %>%
-                dplyr::select(GeneID, FDR:IncLevelDifference) %>%
-                distinct(GeneID, .keep_all = TRUE)
+        # uniqIDs <- dPSIs %>%
+        #         filter(FDR < fdr & abs(IncLevelDifference) > dpsi ) %>%
+        #         dplyr::select(GeneID, FDR:IncLevelDifference) %>%
+        #         tidyr::separate(IncLevel1, into = c("atRWT2S.psi", "atRWT3S.psi"), sep = ",") %>%
+        #         tidyr::separate(IncLevel2, into = c("atRKO1S.psi", "atRKO3S.psi"), sep = ",") %>%
+        #         mutate_each_(funs(as.numeric), c("atRWT2S.psi", "atRWT3S.psi", "atRKO1S.psi", "atRKO3S.psi" )) %>%
+        #         dplyr::filter(abs(IncLevelDifference) > abs(atRWT2S.psi - atRWT3S.psi) & abs(IncLevelDifference) > abs(atRKO1S.psi - atRKO3S.psi)) %>%
+        #         distinct(GeneID, .keep_all = TRUE)
         
         allEvents <- dPSIs %>%
                 filter(FDR < fdr & abs(IncLevelDifference) > dpsi ) %>% 
@@ -231,6 +236,9 @@ processRMATS <- function (myfile, fdr = 0.05, dpsi = "", outfile = FALSE, events
                 tidyr::separate(IncLevel2, into = c("atRKO1S.psi", "atRKO3S.psi"), sep = ",") %>%
                 mutate_each_(funs(as.numeric), c("atRWT2S.psi", "atRWT3S.psi", "atRKO1S.psi", "atRKO3S.psi" )) %>%
                 dplyr::filter(abs(IncLevelDifference) > abs(atRWT2S.psi - atRWT3S.psi) & abs(IncLevelDifference) > abs(atRKO1S.psi - atRKO3S.psi) )
+        
+        ## Get only unique Gene identifiers
+        uniqIDs <- allEvents %>% distinct(GeneID, .keep_all = TRUE)
         
         if (outfile == TRUE){
                 write.table(uniqIDs, file = paste(ASType,"fdr", fdr, "dpsi", dpsi, "uniq.genes.txt", sep = "_"),
