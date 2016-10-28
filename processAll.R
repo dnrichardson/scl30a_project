@@ -11,6 +11,7 @@ library(VennDiagram)
 library(plyr)
 library(tidyr)
 
+## Set basic parameters
 dir_prefix <- "~/Dropbox/Current/newscl30a/"
 fdr <- 0.05
 dpsi <- 0.2
@@ -158,11 +159,13 @@ genesDf$variable <- "genes"
 combinedDf <- bind_rows(eventsDf, genesDf)
 
 ## Create plot of AS event types
+png(paste0("spladderASCounts_dcut_", dcut, ".png"))
 ggplot(combinedDf, aes(x = types, y = counts, fill = variable)) + 
         geom_bar(stat = "identity", position = "dodge") + ggtitle(paste0("splAdder counts of AS event types (dPSI > 0.2)\n total counts of AS events: ",
 sum(Counts), ", AS genes: ", sum(uniqGeneCounts))) +
         labs( x = "AS event types" ) + geom_text(aes(label=counts), position = position_dodge(width = 1), vjust = 0) +
         guides(fill=guide_legend(title=NULL)) + theme_grey()
+dev.off()
 
 ## rMATS
 ## Order is: A3, A5, MXE, RI, SE
@@ -179,11 +182,13 @@ genesDf$variable <- "genes"
 combinedDf <- bind_rows(eventsDf, genesDf)
 
 ## Create plot of AS event types
+png(paste0("rMATSASCounts_dcut_", dcut, ".png"))
 ggplot(combinedDf, aes(x = types, y = counts, fill = variable)) + 
         geom_bar(stat = "identity", position = "dodge") + ggtitle(paste0("rMATS counts of AS event types (dPSI > 0.2)\n total counts of AS events: ",
                                                                          sum(Counts), ", AS genes: ", sum(uniqGeneCounts))) +
         labs( x = "AS event types" ) + geom_text(aes(label=counts), position = position_dodge(width = 1), vjust = 0) +
         guides(fill=guide_legend(title=NULL)) + theme_grey()
+dev.off()
 
 ## SUPPA
 ## Order is: A3, A5, MXE, RI, SE
@@ -200,15 +205,18 @@ genesDf$variable <- "genes"
 combinedDf <- bind_rows(eventsDf, genesDf)
 
 ## Create plot of AS event types
+png(paste0("SUPPAsASCounts_dcut_", dcut, ".png"))
 ggplot(combinedDf, aes(x = types, y = counts, fill = variable)) + 
         geom_bar(stat = "identity", position = "dodge") + ggtitle(paste0("SUPPA counts of AS event types (dPSI > 0.2)\n total counts of AS events: ",
                                                                          sum(Counts), ", AS genes: ", sum(uniqGeneCounts))) +
         labs( x = "AS event types" ) + geom_text(aes(label=counts), position = position_dodge(width = 1), vjust = 0) +
         guides(fill=guide_legend(title=NULL)) + theme_grey()
-
+dev.off()
 
 ## Look at distributions of differences between replicates.
 ## Looks like a good cutoff would be 0.3
+
+png("histogram_diff_psi_reps.png")
 
 par(mfrow = c(3,2))
 
@@ -245,3 +253,4 @@ h$density <- h$counts/sum(h$counts)*100
 plot(h, freq = FALSE, ylab = "percent", xlab = "difference in PSI between reps", main = "Distribution of differences\n in KO PSI for SUPPA events")
 abline(v = 0.2)
 
+dev.off()
