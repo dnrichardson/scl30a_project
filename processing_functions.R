@@ -12,7 +12,7 @@
 ## myGenes <- mapply(processSpladder, myList, testResults, dpsi = 0.2, events = FALSE, SIMPLIFY = FALSE)
 
 ## The main function to process spladder output
-processSpladder <- function (mergeGraphFile, testResultsFile, fdr = 0.05, dpsi = 0.1, outfile = FALSE, events = TRUE,
+processSpladder <- function (mergeGraphFile, testResultsFile, fdr = 0.05, dpsi = 0.1, dcut = 2, outfile = FALSE, events = TRUE,
                              dirs = TRUE){
         
         # Processes output from SplAdder and can generate human readable tables.
@@ -26,6 +26,8 @@ processSpladder <- function (mergeGraphFile, testResultsFile, fdr = 0.05, dpsi =
         #       events: if TRUE, create output with all events, else condense events into unique gene IDs
         #       dirs: if TRUE, take the path into consideration when parsing out the "ASType"
         #               only use this if your input files to this function are not in the same working directory
+        #       dcut: Default is 2, which returns all events regardless of concordance of PSI values in each replicate
+        #       based on distributions of differences of psi values in my data, a cutoff of 0.3 should include most events
         
         ## Read in the merge_graph file, rename some variables and calculate dPSI
         confirmedEvents <- tbl_df(read.table(mergeGraphFile, stringsAsFactors = FALSE, header = TRUE)) %>% 
@@ -44,27 +46,6 @@ processSpladder <- function (mergeGraphFile, testResultsFile, fdr = 0.05, dpsi =
         ## If there are directory paths involved, have to parse differently
         if (dirs == TRUE){
                 
-#                if (grepl("alt_3", mergeGraphFile) == TRUE){
- #                       ASType <- "A3" 
- #                       print(ASType)
- #               } else if (grepl("alt_5", mergeGraphFile) == TRUE){
- #                       ASType <- "A5"
- #                       print(ASType)
- #               } else if (grepl("intron_retention", mergeGraphFile) == TRUE){
- #                       ASType <- "RI"
- #                       print(ASType)
- #               } else if (grepl("mult_exon_skip", mergeGraphFile) == TRUE){
- #                       ASType <- "ME"
- #                       print(ASType)
- #               } else if (grepl("mutex_exons", mergeGraphFile) == TRUE) {
- #                       ASType <- "MXE"
- #                       print(ASType)
- #               } else 
- #                       ASType <- "SE"
- #       print(ASType)
-        
-                
-
                 tmp <- unlist(strsplit(mergeGraphFile, split = "\\." ))[1]
                 
                 ASType <- tail(unlist(strsplit(tmp, split = "/", fixed = TRUE)), n = 1)
@@ -81,10 +62,10 @@ processSpladder <- function (mergeGraphFile, testResultsFile, fdr = 0.05, dpsi =
         ## between the replicates is greater than the delta psi. This is to ensure that our replicates agree
         
         eventswithdPSI <- inner_join(confirmedEvents, dAS, by = "event_id") %>%
-                dplyr::mutate(Type = ASType) %>%
-                dplyr::select(event_id, GeneID, Type, atRWT2S.psi, atRWT3S.psi, atRKO1S.psi, atRKO3S.psi, dPSI, p_val_adj) %>% 
-                dplyr::filter(abs(dPSI) > dpsi, abs(dPSI) > abs(atRWT2S.psi - atRWT3S.psi) & abs(dPSI) > abs(atRKO1S.psi - atRKO3S.psi) )
-                
+                dplyr::mutate(Type = ASType, dWT = abs(atRWT2S.psi - atRWT3S.psi), dKO = abs(atRKO1S.psi - atRKO3S.psi)) %>%
+                dplyr::select(event_id, GeneID, Type, atRWT2S.psi, atRWT3S.psi, atRKO1S.psi, atRKO3S.psi, dPSI, dWT, dKO, p_val_adj) %>% 
+                dplyr::filter(abs(dPSI) > dpsi, abs(atRWT2S.psi - atRWT3S.psi) < dcut & abs(atRKO1S.psi - atRKO3S.psi) < dcut )
+        
         
         #eventswithdPSI$Type <- ASType
         
@@ -118,7 +99,7 @@ processSpladder <- function (mergeGraphFile, testResultsFile, fdr = 0.05, dpsi =
 # totalNumberofGeneswithAS <- bind_rows(myGenes) %>% distinct(geneID) %>% nrow
 
 ## The main function to process suppa output
-processSuppa <- function (dpsifile, psivecfile, fdr, dpsi = "", outfile = FALSE, events = TRUE, dirs = TRUE){
+processSuppa <- function (dpsifile, psivecfile, fdr, dpsi = "", dcut = 2, outfile = FALSE, events = TRUE, dirs = TRUE){
         
         # Processes output from SUPPA and can generate human readable tables.
         #
@@ -162,8 +143,9 @@ processSuppa <- function (dpsifile, psivecfile, fdr, dpsi = "", outfile = FALSE,
         
         ## Join the matching rows based on event_id
         eventswithdPSI <- inner_join(allEvents, psivecs, by = "event") %>%
-                dplyr::select(event, Type, GeneID, atRWT2S.psi, atRWT3S.psi, atRKO1S.psi, atRKO3S.psi, dPSI, FDR) %>% 
-                dplyr::filter(abs(dPSI) > dpsi, abs(dPSI) > abs(atRWT2S.psi - atRWT3S.psi) & abs(dPSI) > abs(atRKO1S.psi - atRKO3S.psi) )
+                dplyr::mutate(dWT = abs(atRWT2S.psi - atRWT3S.psi), dKO = abs(atRKO1S.psi - atRKO3S.psi)) %>%
+                dplyr::select(event, Type, GeneID, atRWT2S.psi, atRWT3S.psi, atRKO1S.psi, atRKO3S.psi, dPSI, dWT, dKO, FDR) %>%
+                dplyr::filter(abs(dPSI) > dpsi, abs(atRWT2S.psi - atRWT3S.psi) < dcut & abs(atRKO1S.psi - atRKO3S.psi) < dcut )
         
         uniqIDs <- eventswithdPSI %>% distinct(GeneID, .keep_all = TRUE)
         
@@ -188,7 +170,7 @@ processSuppa <- function (dpsifile, psivecfile, fdr, dpsi = "", outfile = FALSE,
 ## myEvents <- lapply(myList, sigEventprocessor, 0.05, 0.2)
 ## myGenes <- lapply(myList, sigEventprocessor, 0.05, 0.2, events = FALSE)
 
-processRMATS <- function (myfile, fdr = 0.05, dpsi = "", outfile = FALSE, events = TRUE, dirs = TRUE){
+processRMATS <- function (myfile, fdr = 0.05, dpsi = "", dcut = 2, outfile = FALSE, events = TRUE, dirs = TRUE){
         
         # Processes output from rMATS and can generate human readable tables.
         #
@@ -235,7 +217,9 @@ processRMATS <- function (myfile, fdr = 0.05, dpsi = "", outfile = FALSE, events
                 tidyr::separate(IncLevel1, into = c("atRWT2S.psi", "atRWT3S.psi"), sep = ",") %>%
                 tidyr::separate(IncLevel2, into = c("atRKO1S.psi", "atRKO3S.psi"), sep = ",") %>%
                 mutate_each_(funs(as.numeric), c("atRWT2S.psi", "atRWT3S.psi", "atRKO1S.psi", "atRKO3S.psi" )) %>%
-                dplyr::filter(abs(IncLevelDifference) > abs(atRWT2S.psi - atRWT3S.psi) & abs(IncLevelDifference) > abs(atRKO1S.psi - atRKO3S.psi) )
+                dplyr::mutate(dWT = abs(atRWT2S.psi - atRWT3S.psi), dKO = abs(atRKO1S.psi - atRKO3S.psi)) %>%
+                dplyr::select(GeneID, ID, Type, atRWT2S.psi, atRWT3S.psi, atRKO1S.psi, atRKO3S.psi, IncLevelDifference, dWT, dKO, FDR) %>%
+                dplyr::filter(abs(atRWT2S.psi - atRWT3S.psi) < dcut & abs(atRKO1S.psi - atRKO3S.psi) < dcut )
         
         ## Get only unique Gene identifiers
         uniqIDs <- allEvents %>% distinct(GeneID, .keep_all = TRUE)
