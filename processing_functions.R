@@ -13,7 +13,7 @@
 
 ## The main function to process spladder output
 processSpladder <- function (mergeGraphFile, testResultsFile, fdr = 0.05, dpsi = 0.1, dcut = 2, outfile = FALSE, events = TRUE,
-                             dirs = TRUE){
+                             dirs = TRUE, coords = TRUE){
         
         # Processes output from SplAdder and can generate human readable tables.
         #
@@ -37,7 +37,7 @@ processSpladder <- function (mergeGraphFile, testResultsFile, fdr = 0.05, dpsi =
         ## Read in the spladder_test.py results files
         dAS <- tbl_df(read.table(testResultsFile, stringsAsFactors = FALSE, header = TRUE)) %>% 
                 dplyr::rename(GeneID = gene) %>%
-                select(event_id, GeneID, p_val_adj) %>%
+                dplyr::select(event_id, GeneID, p_val_adj) %>%
                 filter(p_val_adj < fdr)
                 
         
@@ -66,6 +66,14 @@ processSpladder <- function (mergeGraphFile, testResultsFile, fdr = 0.05, dpsi =
                 dplyr::select(event_id, GeneID, Type, atRWT2S.psi, atRWT3S.psi, atRKO1S.psi, atRKO3S.psi, dPSI, dWT, dKO, p_val_adj) %>% 
                 dplyr::filter(abs(dPSI) > dpsi, abs(atRWT2S.psi - atRWT3S.psi) < dcut & abs(atRKO1S.psi - atRKO3S.psi) < dcut )
         
+        ## Get coords
+        
+        if (coords == TRUE) {
+                eventCoords <- inner_join(confirmedEvents, dAS, by = "event_id") %>%
+                        dplyr::mutate(Type = ASType, dWT = abs(atRWT2S.psi - atRWT3S.psi), dKO = abs(atRKO1S.psi - atRKO3S.psi)) %>%
+                        dplyr::select(everything()) %>% 
+                        dplyr::filter(abs(dPSI) > dpsi, abs(atRWT2S.psi - atRWT3S.psi) < dcut & abs(atRKO1S.psi - atRKO3S.psi) < dcut )
+        }
         
         #eventswithdPSI$Type <- ASType
         
@@ -81,8 +89,11 @@ processSpladder <- function (mergeGraphFile, testResultsFile, fdr = 0.05, dpsi =
                 write.table(uniqGenes,file = paste(ASType,"fdr", fdr, "dpsi", dpsi, "events.unique.gene.txt", sep = "_"),
                             quote = FALSE, sep = "\t", row.names = FALSE, col.names = TRUE)
         }
-        else if (events == TRUE){
-                return (eventswithdPSI)
+        else if (events == TRUE & coords == TRUE){
+                return (list(eventswithdPSI, eventCoords))
+        #else if (coords == TRUE){
+         #       return (eventCoords)
+        #}
         } else
                 return (uniqGenes)
 }
@@ -97,6 +108,78 @@ processSpladder <- function (mergeGraphFile, testResultsFile, fdr = 0.05, dpsi =
 
 ## How many unique genes participating in AS?
 # totalNumberofGeneswithAS <- bind_rows(myGenes) %>% distinct(geneID) %>% nrow
+
+## Second spladder function just to get the coordinates of events
+
+SpladderCoords <- function (mergeGraphFile, testResultsFile, fdr = 0.05, dpsi = 0.1, dcut = 2, outfile = FALSE,
+                             dirs = TRUE){
+        
+        # Processes output from SplAdder and can generate human readable tables.
+        #
+        # Args:
+        #       mergeGraphFile: The mergegraph output file of SplAdder
+        #       testResultsFile: The *.tsv output file of spladder_test.py
+        #       fdr: The false discovery rate cutoff you want to filter by
+        #       dpsi: The delta PSI cutoff you want to filter by
+        #       outfile: if TRUE, write output to file
+        #       events: if TRUE, create output with all events, else condense events into unique gene IDs
+        #       dirs: if TRUE, take the path into consideration when parsing out the "ASType"
+        #               only use this if your input files to this function are not in the same working directory
+        #       dcut: Default is 2, which returns all events regardless of concordance of PSI values in each replicate
+        #       based on distributions of differences of psi values in my data, a cutoff of 0.3 should include most events
+        
+        ## Read in the merge_graph file, rename some variables and calculate dPSI
+        confirmedEvents <- tbl_df(read.table(mergeGraphFile, stringsAsFactors = FALSE, header = TRUE)) %>% 
+                setNames(gsub("Aligned.sortedByCoord.out","",names(.))) %>% 
+                mutate(dPSI = 0.5*(atRWT2S.psi + atRWT3S.psi) - 0.5*(atRKO1S.psi + atRKO3S.psi))
+        
+        ## Read in the spladder_test.py results files
+        dAS <- tbl_df(read.table(testResultsFile, stringsAsFactors = FALSE, header = TRUE)) %>% 
+                dplyr::rename(GeneID = gene) %>%
+                dplyr::select(event_id, GeneID, p_val_adj) %>%
+                filter(p_val_adj < fdr)
+        
+        
+        ## Take note of the AS type for file-naming purposes
+        
+        ## If there are directory paths involved, have to parse differently
+        if (dirs == TRUE){
+                
+                tmp <- unlist(strsplit(mergeGraphFile, split = "\\." ))[1]
+                
+                ASType <- tail(unlist(strsplit(tmp, split = "/", fixed = TRUE)), n = 1)
+                ASType <- gsub("merge_graphs_", "", ASType)
+                ASType <- gsub("_C3", "", ASType)
+        } else
+        {
+                ASType <- unlist(strsplit(mergeGraphFile, split = "\\." ))[1]
+                ASType <- gsub("merge_graphs_", "", ASType)
+                ASType <- gsub("_C3", "", ASType)
+        }
+        
+        ## Join the matching rows based on event_id, filter with a heuristic to discard rows where difference
+        ## between the replicates is greater than the delta psi. This is to ensure that our replicates agree
+        
+        ## Get coords
+        
+        eventCoords <- inner_join(confirmedEvents, dAS, by = "event_id") %>%
+        dplyr::mutate(Type = ASType, dWT = abs(atRWT2S.psi - atRWT3S.psi), dKO = abs(atRKO1S.psi - atRKO3S.psi)) %>%
+        dplyr::select(everything()) %>% 
+        dplyr::filter(abs(dPSI) > dpsi, abs(atRWT2S.psi - atRWT3S.psi) < dcut & abs(atRKO1S.psi - atRKO3S.psi) < dcut )
+        
+        ## Get a genewise list of unique ids
+        #uniqGenes <- distinct(eventswithdPSI, GeneID, .keep_all = TRUE)
+        
+        ## Write both to files
+        if (outfile == TRUE){
+                write.table(eventCoords, file = paste(ASType,"fdr", fdr, "dpsi", dpsi, "events_coords.txt", sep = "_"),
+                            quote = FALSE, sep = "\t", row.names = FALSE, col.names = TRUE )
+        }
+        else{
+                return (eventCoords)
+}
+
+}
 
 ## The main function to process suppa output
 processSuppa <- function (dpsifile, psivecfile, fdr, dpsi = "", dcut = 2, outfile = FALSE, events = TRUE, dirs = TRUE){
@@ -237,6 +320,67 @@ processRMATS <- function (myfile, fdr = 0.05, dpsi = "", dcut = 2, outfile = FAL
                 return (uniqIDs)
         
 }
+
+rMATsCoords <- function (myfile, fdr = 0.05, dpsi = "", dcut = 2, outfile = FALSE, events = TRUE, dirs = TRUE){
+        
+        # Processes output from rMATS and can generate human readable tables.
+        #
+        # Args:
+        #       myfile: A "ReadsOnTargetAndJunctionCounts" output file of rMATS
+        #       fdr: The false discovery rate cutoff you want to filter by
+        #       dpsi: The delta PSI cutoff you want to filter by
+        #       outfile: if TRUE, write output to file
+        #       events: if TRUE, create output with all events, else condense events into unique gene IDs
+        #       dirs: if TRUE, take the path into consideration when parsing out the "ASType"
+        #               only use this if your input files to this function are not in the same working directory
+        
+        # TO DO: break apart inclusion levels into separate variables
+        
+        
+        dPSIs <- tbl_df(read.table(myfile, header = TRUE, sep = "\t", stringsAsFactors = FALSE,
+                                   quote = "\""))
+        
+        ## If there are directory paths involved, have to parse differently
+        if (dirs == TRUE){
+                tmp <- unlist(strsplit(myfile, split = "\\." ))[1]
+                ASType <- unlist(strsplit(tmp, split = "/", fixed = TRUE))[9]
+        } else{
+                ASType <- unlist(strsplit(myfile, split = "\\." ))[1]
+        }
+        
+        
+        # uniqIDs <- dPSIs %>%
+        #         filter(FDR < fdr & abs(IncLevelDifference) > dpsi ) %>%
+        #         dplyr::select(GeneID, FDR:IncLevelDifference) %>%
+        #         tidyr::separate(IncLevel1, into = c("atRWT2S.psi", "atRWT3S.psi"), sep = ",") %>%
+        #         tidyr::separate(IncLevel2, into = c("atRKO1S.psi", "atRKO3S.psi"), sep = ",") %>%
+        #         mutate_each_(funs(as.numeric), c("atRWT2S.psi", "atRWT3S.psi", "atRKO1S.psi", "atRKO3S.psi" )) %>%
+        #         dplyr::filter(abs(IncLevelDifference) > abs(atRWT2S.psi - atRWT3S.psi) & abs(IncLevelDifference) > abs(atRKO1S.psi - atRKO3S.psi)) %>%
+        #         distinct(GeneID, .keep_all = TRUE)
+        
+        allEvents <- dPSIs %>%
+                filter(FDR < fdr & abs(IncLevelDifference) > dpsi ) %>% 
+                dplyr::select(everything())
+        
+        allEvents$Type <- ASType
+        
+        allEvents <- allEvents %>% 
+                tidyr::separate(IncLevel1, into = c("atRWT2S.psi", "atRWT3S.psi"), sep = ",") %>%
+                tidyr::separate(IncLevel2, into = c("atRKO1S.psi", "atRKO3S.psi"), sep = ",") %>%
+                mutate_each_(funs(as.numeric), c("atRWT2S.psi", "atRWT3S.psi", "atRKO1S.psi", "atRKO3S.psi" )) %>%
+                dplyr::mutate(dWT = abs(atRWT2S.psi - atRWT3S.psi), dKO = abs(atRKO1S.psi - atRKO3S.psi)) %>%
+                #dplyr::select(everything()) %>%
+                dplyr::filter(abs(atRWT2S.psi - atRWT3S.psi) < dcut & abs(atRKO1S.psi - atRKO3S.psi) < dcut )
+        
+        if (outfile == TRUE){
+        
+                write.table(allEvents, file = paste(ASType,"fdr", fdr, "dpsi", dpsi, "all.events_coords.txt", sep = "_"),
+                            quote = FALSE, sep = "\t", row.names = FALSE, col.names = TRUE )
+        } 
+        else
+                return (allEvents)
+}
+
 
 ## This is a function that will create a volcano plot for rMATS output. It requires the calibrate library
 ## but right now it's a very prototypical function that needs some work to be generally useful.
