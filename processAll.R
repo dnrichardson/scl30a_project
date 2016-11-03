@@ -37,6 +37,7 @@ spladderList_testR <- Sys.glob(paste0(dir_prefix, "spladder/*.tsv"))
 ## RMATS PROCESSING ####################################################
 myRmatsEvents <- lapply(rmatsList, processRMATS, fdr, dpsi, dcut)
 myRmatsGenes <- lapply(rmatsList, processRMATS, fdr, dpsi, dcut, events = FALSE)
+myRmatsCoordsList <- lapply(rmatsList, rMATsCoords, fdr, dpsi, dcut = 2)
 
 ## Create output table ranked by deltaPSI
 ## The following tsv file was obtained from Araport by uploading the gene IDs found in the AtRTD2 April 2016 GTF file
@@ -56,6 +57,8 @@ write.table(finalTableEventsR, file = paste0("AllEvents_ranked_by_dPSI_rMATS_dcu
 mySpladderEvents <- mapply(processSpladder, spladderList_mgraphs, spladderList_testR, dpsi = dpsi, dcut = dcut, SIMPLIFY = FALSE)
 mySpladderGenes <- mapply(processSpladder, spladderList_mgraphs, spladderList_testR, dpsi = dpsi, dcut = dcut, events = FALSE, 
                           SIMPLIFY = FALSE)
+
+mySpladderCoordList <- mapply(SpladderCoords, spladderList_mgraphs, spladderList_testR, dpsi = dpsi, dcut = 2, SIMPLIFY = FALSE)
 
 ## Create a table arranged by dPSI
 
@@ -224,6 +227,7 @@ h <- hist(finalTableEventsR$dWT, plot = FALSE)
 h$density <- h$counts/sum(h$counts)*100
 plot(h, freq = FALSE, ylab = "percent", xlab = "difference in PSI between reps", main = "Distribution of differences\n in WT PSI for rMATS events")
 abline(v = 0.2)
+#rug(h$counts)
 
 h <- hist(finalTableEventsR$dKO, plot = FALSE)
 h$density <- h$counts/sum(h$counts)*100
@@ -254,3 +258,123 @@ plot(h, freq = FALSE, ylab = "percent", xlab = "difference in PSI between reps",
 abline(v = 0.2)
 
 dev.off()
+
+par(mfrow=c(1,1))
+
+## Plot the PSI values against each other
+## rMATS
+plot(finalTableEventsR$atRWT2S.psi, finalTableEventsR$atRWT3S.psi, col = rgb(0, 0, 0, 0.2), pch = 19)
+abline(lm(finalTableEventsR$atRWT3S.psi~finalTableEventsR$atRWT2S.psi), col="red") # regression line (y~x) 
+cor(finalTableEventsR$atRWT2S.psi, finalTableEventsR$atRWT3S.psi)
+
+plot(finalTableEventsR$atRKO1S.psi, finalTableEventsR$atRKO3S.psi, col = rgb(0, 0, 0, 0.2), pch = 19)
+
+## SplAdder
+plot(finalTableEventsSp$atRWT2S.psi, finalTableEventsSp$atRWT3S.psi, col = rgb(0, 0, 0, 0.2), pch = 19)
+plot(finalTableEventsSp$atRKO1S.psi, finalTableEventsSp$atRKO3S.psi, col = rgb(0, 0, 0, 0.2), pch = 19)
+cor(finalTableEventsSp$atRWT2S.psi, finalTableEventsSp$atRWT3S.psi)
+cor(finalTableEventsSp$atRKO1S.psi, finalTableEventsSp$atRKO3S.psi)
+
+## SUPPA
+plot(finalTableEventsSu$atRWT2S.psi, finalTableEventsSu$atRWT3S.psi, col = rgb(0, 0, 0, 0.2), pch = 19)
+plot(finalTableEventsSu$atRKO1S.psi, finalTableEventsSu$atRKO3S.psi, col = rgb(0, 0, 0, 0.2), pch = 19)
+cor(finalTableEventsSu$atRWT2S.psi, finalTableEventsSu$atRWT3S.psi)
+cor(finalTableEventsSu$atRKO1S.psi, finalTableEventsSu$atRKO3S.psi)
+
+## Convert Type column to factor
+finalTableEventsR <- transform(finalTableEventsR, Type = factor(Type))
+table(finalTableEventsR$Type)
+
+finalTableEventsSu <- transform(finalTableEventsSu, Type = factor(Type))
+table(finalTableEventsSu$Type)
+
+finalTableEventsSp <- transform(finalTableEventsSp, Type = factor(Type))
+table(finalTableEventsSp$Type)
+
+## Use GRanges to see which events actually overlap each other
+
+## Create a dataframe that holds the coordinates of the AS event in question. Lets try SplAdder IR for now
+## merge_graphs_intron_retention_C3.confirmed.txt
+## contig	strand	event_id	gene_name	exon1_start	exon1_end	intron_start	intron_end	exon2_start	exon2_end
+## Chr2	+	intron_retention_42335	AT2G43010 17887068	17887157
+
+##########################
+#       SPLADDER         #
+##########################
+## Build the SplAdder data frame from the output of the function, SpladderCoords
+spladderRI.df <- mySpladderCoordList[[4]] %>% dplyr::select(contig:gene_name, intron_start, intron_end) %>% dplyr::rename(
+        chr = contig, start = intron_start, end = intron_end, GeneID = gene_name)
+
+spladderA3_1.df <- mySpladderCoordList[[1]] %>% dplyr::select(contig:gene_name, exon_alt1_start, exon_alt1_end) %>% dplyr::rename(
+        chr = contig, start = exon_alt1_start, end = exon_alt1_end, GeneID = gene_name)
+
+spladderA3_2.df <- mySpladderCoordList[[1]] %>% dplyr::select(contig:gene_name, exon_alt2_start, exon_alt2_end) %>% dplyr::rename(
+        chr = contig, start = exon_alt2_start, end = exon_alt2_end, GeneID = gene_name)
+
+grSpladderRI <- makeGRangesFromDataFrame(spladderRI.df, keep.extra.columns = TRUE)
+
+grSpladderA31 <- makeGRangesFromDataFrame(spladderA3_1.df, keep.extra.columns = TRUE)
+grSpladderA32 <- makeGRangesFromDataFrame(spladderA3_2.df, keep.extra.columns = TRUE)
+
+#########################
+#       SUPPA           #
+#########################
+
+## Build the gr object from the Suppa Table
+SuppaRI.df <- finalTableEventsSu[finalTableEventsSu$Type == "RI",] %>% dplyr::select(event, GeneID)
+
+## Chromosome
+SuppaRI.df$chr <- sapply(strsplit(SuppaRI.df$event, ":"), "[", 2)
+## RI coordinates
+tmp <- sapply(strsplit(SuppaRI.df$event, ":"), "[", 4)
+
+SuppaRI.df$start <- sapply(strsplit(tmp, "-"), "[", 1)
+SuppaRI.df$end <- sapply(strsplit(tmp, "-"), "[", 2)
+
+SuppaRI.df$strand <- sapply(strsplit(SuppaRI.df$event, ":"), "[", 6)
+head(SuppaRI.df)
+
+grSuppaRI <- makeGRangesFromDataFrame(SuppaRI.df, keep.extra.columns = TRUE)
+
+###########################
+#       RMATS             #
+###########################
+
+rMATSRI.df <- myRmatsCoordsList[[4]] %>% dplyr::select(chr, GeneID, ID, strand, riExonStart_0base, riExonEnd) %>%
+        dplyr::rename(start = riExonStart_0base, end = riExonEnd)
+
+nrow(rMATSRI.df)
+# 508
+
+rMATSA3_1.df <- myRmatsCoordsList[[1]] %>% dplyr::select(chr, GeneID, ID, strand, longExonStart_0base, longExonEnd) %>%
+        dplyr::rename(start = longExonStart_0base, end = longExonEnd)
+
+rMATSA3_2.df <- myRmatsCoordsList[[1]] %>% dplyr::select(chr, GeneID, ID, strand, shortES, shortEE) %>%
+        dplyr::rename(start = shortES, end = shortEE)
+
+
+grRmatsRI <- makeGRangesFromDataFrame(rMATSRI.df, keep.extra.columns = TRUE)
+
+grRmatsA3_1 <- makeGRangesFromDataFrame(rMATSA3_1.df, keep.extra.columns = TRUE)
+
+## Find overlaps between Spladder and Suppa and rMATS Intron Retention ###
+
+spladderAndSuppa_overlaps <- findOverlaps(grSpladderRI, grSuppaRI)
+
+overlaps_spladder_perspective_vs_Suppa_RI <- subsetByOverlaps(grSpladderRI, grSuppaRI, minoverlap = 10)
+
+overlaps_spladder_perspective_vs_rMATS_RI <- subsetByOverlaps(grSpladderRI, grRmatsRI, minoverlap = 10)
+# no overlaps!
+
+overlaps_suppa_perspective_vs_rMATS_RI <- subsetByOverlaps(grSuppaRI, grRmatsRI, minoverlap = 10)
+# 126 ranges
+
+## Find overlaps between Spladder and Suppa and rMATS A3 SS
+
+overlaps_spladder_perspective_vs_rMATS_A3 <- subsetByOverlaps(grSpladderA31, grRmatsA3_1, minoverlap = 10)
+# 4 ranges
+subsetByOverlaps(grSpladderA32, grRmatsA3_1, minoverlap = 10)
+# same 4 ranges
+
+
+
