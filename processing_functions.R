@@ -13,7 +13,7 @@
 
 ## The main function to process spladder output
 processSpladder <- function (mergeGraphFile, testResultsFile, fdr = 0.05, dpsi = 0.1, dcut = 2, outfile = FALSE, events = TRUE,
-                             dirs = TRUE, coords = TRUE){
+                             dirs = TRUE){
         
         # Processes output from SplAdder and can generate human readable tables.
         #
@@ -66,36 +66,24 @@ processSpladder <- function (mergeGraphFile, testResultsFile, fdr = 0.05, dpsi =
                 dplyr::select(event_id, GeneID, Type, atRWT2S.psi, atRWT3S.psi, atRKO1S.psi, atRKO3S.psi, dPSI, dWT, dKO, p_val_adj) %>% 
                 dplyr::filter(abs(dPSI) > dpsi, abs(atRWT2S.psi - atRWT3S.psi) < dcut & abs(atRKO1S.psi - atRKO3S.psi) < dcut )
         
-        ## Get coords
         
-        if (coords == TRUE) {
-                eventCoords <- inner_join(confirmedEvents, dAS, by = "event_id") %>%
-                        dplyr::mutate(Type = ASType, dWT = abs(atRWT2S.psi - atRWT3S.psi), dKO = abs(atRKO1S.psi - atRKO3S.psi)) %>%
-                        dplyr::select(everything()) %>% 
-                        dplyr::filter(abs(dPSI) > dpsi, abs(atRWT2S.psi - atRWT3S.psi) < dcut & abs(atRKO1S.psi - atRKO3S.psi) < dcut )
+        if (events == TRUE){
+                return (eventswithdPSI)
+        } else if (events == FALSE) {
+                ## Get a genewise list of unique ids
+                uniqGenes <- distinct(eventswithdPSI, GeneID, .keep_all = TRUE)
+                return (uniqGenes)
         }
         
-        #eventswithdPSI$Type <- ASType
-        
-        #eventswithdPSI <- dplyr::select(eventswithdPSI, event_id, GeneID, Type, p_val_adj)
-        
-        ## Get a genewise list of unique ids
-        uniqGenes <- distinct(eventswithdPSI, GeneID, .keep_all = TRUE)
-        
         ## Write both to files
-        if (outfile == TRUE){
+        if (outfile == TRUE & events == TRUE){
                 write.table(eventswithdPSI, file = paste(ASType,"fdr", fdr, "dpsi", dpsi, "events.txt", sep = "_"),
                             quote = FALSE, sep = "\t", row.names = FALSE, col.names = TRUE )
+        }
+        else if (outfile == TRUE & events == FALSE) {
                 write.table(uniqGenes,file = paste(ASType,"fdr", fdr, "dpsi", dpsi, "events.unique.gene.txt", sep = "_"),
                             quote = FALSE, sep = "\t", row.names = FALSE, col.names = TRUE)
         }
-        else if (events == TRUE & coords == TRUE){
-                return (list(eventswithdPSI, eventCoords))
-        #else if (coords == TRUE){
-         #       return (eventCoords)
-        #}
-        } else
-                return (uniqGenes)
 }
 
 ## Usage example
