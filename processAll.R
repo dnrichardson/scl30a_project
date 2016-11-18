@@ -30,7 +30,8 @@ geneNames3 <- tbl_df(read.table("allthalemine.genes.txt.tsv",
 
 
 ## Create lists for applying various functions using Sys.glob
-rmatsList <- Sys.glob(paste0(dir_prefix, "atrt2d_MATS/MATS_output/*.MATS.ReadsOnTargetAndJunctionCounts.txt"))
+rmatsList <- Sys.glob(paste0(dir_prefix, 
+                             "atrt2d_MATS/MATS_output/*.MATS.ReadsOnTargetAndJunctionCounts.txt"))
 suppaList <- Sys.glob(paste0(dir_prefix, "suppa/atrtd2_quasi/*.dpsi"))
 suppaPsiVecList <- Sys.glob(paste0(dir_prefix, "suppa/atrtd2_quasi/*.psivec"))
 spladderList_mgraphs <- Sys.glob(paste0(dir_prefix, "spladder/*.confirmed.txt"))
@@ -87,7 +88,8 @@ write.table(finalTableEventsSp,
 ## Suppa processing #
 #####################
 mySuppaEvents <- mapply(processSuppa, suppaList, suppaPsiVecList, fdr, dpsi, dcut, SIMPLIFY = FALSE)
-mySuppaGenes <- mapply(processSuppa, suppaList, suppaPsiVecList, fdr, dpsi, dcut, events = FALSE, SIMPLIFY = FALSE)
+mySuppaGenes <- mapply(processSuppa, suppaList, suppaPsiVecList, fdr, dpsi, dcut, events = FALSE, 
+                       SIMPLIFY = FALSE)
 
 ## Create a table arranged by dPSI
 paulaTableEventsSu <- bind_rows(mySuppaEvents) %>% dplyr::arrange(desc(abs(dPSI)))
@@ -97,12 +99,10 @@ write.table(finalTableEventsSu,
                           dcut, ".txt"), quote = FALSE, sep = "\t", 
             row.names = FALSE)
 
-########################################################################
-
-## Venn diagram of unique genes across programs
-## Will generate at http://venndiagram.res.oicr.on.ca
-## Need to create a dataframe with geneIDs as variables for each program
-
+##########################################################################
+## Venn diagram of unique genes across programs                          #
+## Need to create a dataframe with geneIDs as variables for each program #
+##########################################################################
 head(paulaTableEvents)
 
 forVennRmats <- finalTableEventsR$GeneID
@@ -151,10 +151,14 @@ length(unique(onlySuppa_rmats_table$GeneID))
 
 ## With accompanying table with only geneIDs, have to join by hand to make excel table of uneven rows
 
-write.table(commonAcross3, file = paste0("commonAcross3_dcut_", dcut, ".txt"), quote = FALSE, row.names = FALSE)
-write.table(rmats_suppa, file = paste0("rmats_suppa_dcut_", dcut, ".txt"), quote = FALSE, row.names = FALSE)
-write.table(rmats_spladder, file = paste0("rmats_spladder_dcut_", dcut, ".txt"), quote = FALSE, row.names = FALSE)
-write.table(suppa_spladder, file = paste0("suppa_spladder_dcut_", dcut, ".txt"), quote = FALSE, row.names = FALSE)
+write.table(commonAcross3, file = paste0("commonAcross3_dcut_", dcut, ".txt"), quote = FALSE, 
+            row.names = FALSE)
+write.table(rmats_suppa, file = paste0("rmats_suppa_dcut_", dcut, ".txt"), quote = FALSE, 
+            row.names = FALSE)
+write.table(rmats_spladder, file = paste0("rmats_spladder_dcut_", dcut, ".txt"), quote = FALSE, 
+            row.names = FALSE)
+write.table(suppa_spladder, file = paste0("suppa_spladder_dcut_", dcut, ".txt"), quote = FALSE, 
+            row.names = FALSE)
 
 ## Pull out the genes common across all 3 programs, with each program's output
 
@@ -178,8 +182,10 @@ write.table(common10.suppa,
             row.names = FALSE)
 
 
-## Create graphs of events
-library(gridExtra)
+#########################################################################
+## Create barplots of AS event counts for each program alongside unique #
+##  gene counts for that event                                          #
+#########################################################################
 
 ## Order for SplAdder is: A3, A5, SE, RI, MSE
 Types <- c("A3", "A5", "SE", "RI", "MSE")
@@ -202,7 +208,8 @@ splad_ASCounts <- ggplot(combinedDf, aes(x = types, y = counts, fill = variable)
         geom_bar(stat = "identity", position = "dodge") + 
         ggtitle(paste0("splAdder counts of AS event types (dPSI > 0.2)\n total counts of AS events: ",
 sum(Counts), ", AS genes: ", sum(uniqGeneCounts))) +
-        labs( x = "AS event types" ) + geom_text(aes(label=counts), position = position_dodge(width = 1), vjust = 0) +
+        labs( x = "AS event types" ) + geom_text(aes(label=counts), 
+                                                 position = position_dodge(width = 1), vjust = 0) +
         guides(fill=guide_legend(title=NULL)) + theme_grey()
 
 ggsave(paste0("SplAddersASCounts_dcut_", dcut, ".png"), splad_ASCounts)
@@ -229,7 +236,8 @@ rmatsASCounts <- ggplot(combinedDf, aes(x = types, y = counts, fill = variable))
         geom_bar(stat = "identity", position = "dodge") + 
         ggtitle(paste0("rMATS counts of AS event types (dPSI > 0.2)\n total counts of AS events: ",
                        sum(Counts), ", AS genes: ", sum(uniqGeneCounts))) +
-        labs( x = "AS event types" ) + geom_text(aes(label=counts), position = position_dodge(width = 1), vjust = 0) +
+        labs( x = "AS event types" ) + geom_text(aes(label=counts), 
+                                                 position = position_dodge(width = 1), vjust = 0) +
         guides(fill=guide_legend(title=NULL)) + theme_grey()
 
 ggsave(paste0("rMATSsASCounts_dcut_", dcut, ".png"), rmatsASCounts)
@@ -417,11 +425,16 @@ grSpladderES <- makeGRangesFromDataFrame(spladderES.df, keep.extra.columns = TRU
 #########################
 
 ## Build the gr object from the Suppa Table. "SuAll" means no dcut filter
-SuppaRI.df <- finalTableEventsSuAll[finalTableEventsSuAll$Type == "RI",] %>% dplyr::select(event, GeneID)
-SuppaA3.df <- finalTableEventsSuAll[finalTableEventsSuAll$Type == "A3",] %>% dplyr::select(event, GeneID)
-SuppaA5.df <- finalTableEventsSuAll[finalTableEventsSuAll$Type == "A5",] %>% dplyr::select(event, GeneID)
-SuppaES.df <- finalTableEventsSuAll[finalTableEventsSuAll$Type == "SE",] %>% dplyr::select(event, GeneID)
-SuppaMXE.df <- finalTableEventsSuAll[finalTableEventsSuAll$Type == "MXE",] %>% dplyr::select(event, GeneID)
+SuppaRI.df <- finalTableEventsSuAll[finalTableEventsSuAll$Type == "RI",] %>% 
+        dplyr::select(event, GeneID)
+SuppaA3.df <- finalTableEventsSuAll[finalTableEventsSuAll$Type == "A3",] %>% 
+        dplyr::select(event, GeneID)
+SuppaA5.df <- finalTableEventsSuAll[finalTableEventsSuAll$Type == "A5",] %>% 
+        dplyr::select(event, GeneID)
+SuppaES.df <- finalTableEventsSuAll[finalTableEventsSuAll$Type == "SE",] %>% 
+        dplyr::select(event, GeneID)
+SuppaMXE.df <- finalTableEventsSuAll[finalTableEventsSuAll$Type == "MXE",] %>% 
+        dplyr::select(event, GeneID)
 nrow(SuppaMXE.df)
 # 0 MXE events
 
@@ -514,6 +527,7 @@ rMATSA3_2.df <- myRmatsCoordsList[[1]] %>%
         dplyr::rename(start = shortES, end = shortEE)
 
 grRmatsA3_1 <- makeGRangesFromDataFrame(rMATSA3_1.df, keep.extra.columns = TRUE)
+grRmatsA3_2 <- makeGRangesFromDataFrame(rMATSA3_2.df, keep.extra.columns = TRUE)
 
 ## A5
 
@@ -527,6 +541,8 @@ rMATSA5_2.df <- myRmatsCoordsList[[2]] %>%
 
 
 grRmatsA5_1 <- makeGRangesFromDataFrame(rMATSA5_1.df, keep.extra.columns = TRUE)
+
+grRmatsA5_2 <- makeGRangesFromDataFrame(rMATSA5_2.df, keep.extra.columns = TRUE)
 
 ## SE ##
 
@@ -648,7 +664,8 @@ one <- ggplot() + geom_alignment(txdb.arab, which = wh2) +
                                           ymin = -Inf, ymax = Inf), 
                       alpha = 0.4, fill = "green"  )
 
-two <- ggplot() + geom_rect(data = test_event1, aes(xmin = start(test_event1), xmax = end(test_event1), 
+two <- ggplot() + geom_rect(data = test_event1, aes(xmin = start(test_event1), 
+                                                    xmax = end(test_event1), 
                                              ymin = -Inf, ymax = Inf), 
                      alpha = 0.4, fill = "green"  )
 
@@ -665,7 +682,8 @@ genome <- BSgenome.Athaliana.TAIR.04232008
 mir162a <- getSeq(genome, "chr5", start = 2633919, end = 2635578, strand = "-" )
 as.character(mir162a)
 
-## Get tranposase sequence for PCR primer design
+## Get tranposase sequence for PCR primer design, which includes the 
+## exonic sequences before and after the retained intron
 transposase <- mySpladderCoordList[[4]] %>% 
         filter(event_id == "intron_retention_102273") %>% 
         dplyr::select(contig:exon2_end)
@@ -720,3 +738,23 @@ DEGs[DEGs$ID %in% intersect(DEGs$ID, forVennRmats),]
 # 2                      SC35-like splicing factor 30A
 # 26                         transposable_element_gene
 # 3 aluminum induced protein with YGL and LRDR motifs
+
+
+## Some test filtering of the rMATS output to only have a certain number of Inclusion level counts
+## so as to remove potential false positives
+
+thresh <- 50
+
+separatedRmats <- dcut2EventsR %>% 
+        tidyr::separate(IC_SAMPLE_1, into = c("wtIC1", "wtIC2"), sep = ",") %>%
+        tidyr::separate(IC_SAMPLE_2, into = c("koIC1", "koIC2"), sep = ",") %>%
+        tidyr::separate(SC_SAMPLE_1, into = c("wtSC1", "wtSC2"), sep = ",") %>%
+        tidyr::separate(SC_SAMPLE_2, into = c("koSC1", "koSC2"), sep = ",")
+
+separatedRmats %>% filter(wtIC1 > thresh, wtIC2 > thresh, koIC1 > thresh, koIC2 > thresh,
+                          wtSC1 > thresh, wtSC2 > thresh, koSC1 > thresh, koSC2 > thresh)
+
+## Higher inclusion levels in WT, higher skipping levels in KO
+separatedRmats %>% filter(wtIC1 > thresh, wtIC2 > thresh, koSC1 > thresh, koSC2 > thresh) %>%
+        select(ID, GeneID, Type)
+
