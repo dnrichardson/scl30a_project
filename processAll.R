@@ -758,3 +758,33 @@ separatedRmats %>% filter(wtIC1 > thresh, wtIC2 > thresh, koIC1 > thresh, koIC2 
 separatedRmats %>% filter(wtIC1 > thresh, wtIC2 > thresh, koSC1 > thresh, koSC2 > thresh) %>%
         select(ID, GeneID, Type)
 
+## Higher skipping levels in WT, higher inclusion levels in KO
+separatedRmats %>% filter(wtSC1 > thresh, wtSC2 > thresh, koIC1 > thresh, koIC2 > thresh) %>%
+        select(ID, GeneID, Type)
+
+## Load up the DeSeq2 DDS Normalized Gene counts "allNormalizedCounts"
+
+load("deseq2NormCounts.Rda")
+
+str(allNormalizedCounts)
+class(allNormalizedCounts)
+
+## It's a matrix. Need to convert to DF. 
+## Remove scientific notation, to add back, scipen = 0
+options(scipen=999)
+allNormalizedCounts <- as.data.frame(allNormalizedCounts)
+
+## Use these normalized expression counts to filter out "lowly expressed genes" in my
+## AS outputs
+
+## Convert row names to variable, 
+library(tibble)
+allNormalizedCounts <- rownames_to_column(allNormalizedCounts)
+normCounts <- allNormalizedCounts %>% tbl_df() %>% mutate(GeneID = rowname) %>%
+        select(GeneID, atRWT2S:atRKO3S)
+
+## Join to each AS program finalTable
+
+finalSpladderGeneExpCounts <- left_join(finalTableEventsSpAll, normCounts, by = "GeneID")
+finalSuppaGeneExpCounts <- left_join(finalTableEventsSuAll, normCounts, by = "GeneID")
+finalRMatsGeneExpCounts <- left_join(separatedRmats, normCounts, by = "GeneID")
