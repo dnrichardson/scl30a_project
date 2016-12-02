@@ -1,0 +1,99 @@
+---
+title: "HouseKeeping Gene Selection for qPCR Normalization"
+author: "Dale Richardson"
+date: "12/1/2016"
+output: 
+        html_document:
+                keep_md: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Description
+
+Here, I provide all the code and justifications for data transformations that I used in order to arrive at my two chosen housekeeping genes that were used to normalize gene expression values for the SCL30a project. 
+
+## Methods
+
+Relative quantification data were obtained for a set of seven housekeeping genes, using SYBR green dye and an ABI Quantstudio 7 machine. The housekeeping genes were tested in six conditions:
+
+1. Wild Type Control (meaning no salt)
+2. Knockout Control
+3. Over Expressor Control
+4. Wild Type 200mM NaCl
+5. Knockout 200mM NaCl
+6. Over Expressor 200mM NaCl
+
+For each gene and each condition, a total of 4 replicates were measured for the below genes:
+
+1. ACT2
+2. DNAB
+3. EF1A
+4. GAPDH
+5. KU70
+6. PP2AA
+7. UBC21 
+
+The .eds output file was loaded into the Thermofisher Cloud and the results were exported to a .csv file. This .csv was transformed to create a suitable input file to read in using the bioconductor packages, "ReadqPCR" and "NormqPCR". 
+
+## Data processing
+
+```{r load packages, warning = FALSE, message = FALSE}
+## Load packages
+library(ReadqPCR, quietly = TRUE, warn.conflicts = FALSE)
+library(NormqPCR, quietly = TRUE, warn.conflicts = FALSE)
+library(dplyr, quietly = TRUE, warn.conflicts = TRUE)
+```
+
+Read in the exported .csv file from thermofisher cloud, but ignore the comment lines beginning with "#" and only read in the columns, "Sample Name", "Target Name" and "Cq". Furthermore, rename "Sample Name" to "Sample" and "Target Name" to "Detector" as these column names are required by the ReadqPCR package. Also, I have filtered out the non-template control rows from the file as their values were all "undetermined" and do not affect in any way the selection of the housekeeping genes. 
+
+```{r read in csv}
+## Skip the first 11 lines, which contain comments and set na.strings
+
+myData <- read.csv("Well\ Results.csv", header = TRUE, skip = 11, na.strings = c("","-")) %>% 
+        select(Sample = Sample.Name, Detector = Target.Name, Cq) %>%
+        filter(Sample != "No Sample")
+```
+
+Now, I know this is circular, but I will now output "myData" to a txt file that will be read in using the
+read.qPCR function
+
+```{r write file}
+write.table(myData, file = "filteredOutput.txt", quote = FALSE, row.names = FALSE)
+```
+
+Read in the file with the read.qPCR function and run selectHKs function.
+
+```{r select housekeepers}
+filteredData <- read.qPCR("filteredOutput.txt")
+
+## Collapse the replicates to get mean Cq for each gene for each condition
+combinedData <- combineTechReps(filteredData)
+
+## View the data
+exprs(combinedData)
+
+## Select most stable housekeepers
+resHK <- selectHKs(combinedData, method = "geNorm", minNrHKs = 2, log = FALSE, 
+                   Symbols = featureNames(combinedData))
+```
+
+## Which are the most stable housekeepers?
+
+```{r}
+resHK
+
+## Plot the stability values
+matplot(resHK$meanM, type = "b", ylab = "Average Expression Stability", xlab = "Number of remaining Control Genes", main = "Average Expression Stability Values for Housekeeping Genes",
+        xaxt = "n", pch = 19)
+axis(1, at = 1:6, labels = as.character(7:2))
+
+
+```
+
+Based on the above results, the two most stable housekeepers are EF1A and UBC21. I will proceed to normalize
+my qPCR data using the geometric mean of these two housekeepers. 
+
+
