@@ -782,9 +782,69 @@ library(tibble)
 allNormalizedCounts <- rownames_to_column(allNormalizedCounts)
 normCounts <- allNormalizedCounts %>% tbl_df() %>% mutate(GeneID = rowname) %>%
         select(GeneID, atRWT2S:atRKO3S)
+normCounts$baseMean <- rowMeans(normCounts[c(2:5)])
 
-## Join to each AS program finalTable
+## Join to each AS's program finalTable
 
 finalSpladderGeneExpCounts <- left_join(finalTableEventsSpAll, normCounts, by = "GeneID")
 finalSuppaGeneExpCounts <- left_join(finalTableEventsSuAll, normCounts, by = "GeneID")
 finalRMatsGeneExpCounts <- left_join(separatedRmats, normCounts, by = "GeneID")
+
+## Now, filter the tables based on gene expression. The gene should be moderately 
+## expressed in at least one condition!
+
+basemean.thresh <- 500
+
+filteredSpladder <- finalSpladderGeneExpCounts %>% 
+        filter(baseMean > basemean.thresh) %>% 
+        filter(baseMean < 1000)
+
+plot(filteredSpladder$baseMean, filteredSpladder$dPSI)
+hist(filteredSpladder$baseMean, bins )
+
+filteredSuppa <- finalSuppaGeneExpCounts %>%
+        filter(baseMean > basemean.thresh) 
+
+filteredRmats <- finalRMatsGeneExpCounts %>%
+        filter(baseMean > basemean.thresh) %>%
+        arrange(desc(baseMean, IncLevelDifference)) %>%
+        select(ID, GeneID, Type, IncLevelDifference, baseMean) %>%
+        filter(Type == "RI")
+
+## The above is nice, but I think I need to somehow involve junction read counts
+
+## jSplice results
+## Read in jSplice data that has been pre-processed by hand to remove spurious, 
+## aggregated ASMs
+## cat tmp.50.txt | grep -v "Unknown"| awk 'BEGIN {FS = "|"}; {print $1"\t"$2}' 
+##| cut -f 1,3,4,5,6,7,8 > jSplice.cleaned.inc50.txt
+## Load this file into excel, export as .csv
+
+## Read in the inclusion level = 0.5 set
+jSplice <- read.csv("../tmp/jSplice.cleaned.inc50.csv", 
+                      stringsAsFactors = FALSE)
+
+## Filter for genes that have fdr > 0.10 in both replicates
+jSpliceFiltered <- jSplice %>% filter(fdrRepA < 0.10 & fdrRepB < 0.10)
+
+## Create vector of geneIDs and see overlap with other programs
+jSpliceVec <- jSpliceFiltered$GeneID
+
+sum(jSpliceVec %in% finalSpladderGeneExpCounts$GeneID)
+# 2 in common with spladder
+jSpliceVec[jSpliceVec %in% finalSpladderGeneExpCounts$GeneID]
+# [1] "AT3G02300" "AT1G79245"
+
+## rMATS
+sum(jSpliceVec %in% finalRMatsGeneExpCounts$GeneID)
+# 8 in common with rMATs, 2 of which are the same as above
+jSpliceVec[jSpliceVec %in% finalRMatsGeneExpCounts$GeneID]
+# [1] "AT3G59430" "AT2G17730" "AT3G02300" "AT5G65685" "AT1G18750" "AT1G79245" "AT3G06210"
+# [8] "AT1G27630"
+
+## SUPPA
+sum(jSpliceVec %in% finalSuppaGeneExpCounts$GeneID)
+# 11
+jSpliceVec[jSpliceVec %in% finalSuppaGeneExpCounts$GeneID]
+# [1] "AT3G59430" "AT4G01550" "AT4G30570" "AT1G18750" "AT1G79245" "AT1G63670" "AT3G06210"
+# [8] "AT5G45710" "AT2G28940" "AT1G27630" "AT2G01730"
