@@ -210,7 +210,8 @@ processSuppa <- function (dpsifile, psivecfile, fdr, dpsi = "", dcut = 2, outfil
                 dplyr::mutate(GeneID = sapply(strsplit(V1, ";"), "[", 1)) %>%
                 dplyr::rename(FDR = V3, dPSI = V2, event = V1)
         
-        allEvents$Type <- ASType
+        #allEvents$Type <- ASType
+        allEvents[,"Type"] <- ASType
         
         ## Join the matching rows based on event_id
         eventswithdPSI <- inner_join(allEvents, psivecs, by = "event") %>%

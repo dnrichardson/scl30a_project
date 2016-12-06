@@ -37,6 +37,9 @@ suppaPsiVecList <- Sys.glob(paste0(dir_prefix, "suppa/atrtd2_quasi/*.psivec"))
 spladderList_mgraphs <- Sys.glob(paste0(dir_prefix, "spladder/*.confirmed.txt"))
 spladderList_testR <- Sys.glob(paste0(dir_prefix, "spladder/*.tsv"))
 
+## Re-analyze suppa with TPM > 5 cutoff
+suppaList2 <- Sys.glob(paste0(dir_prefix, "suppa/atrtd2_F5/*.dpsi"))
+suppaPsiVecList2 <- Sys.glob(paste0(dir_prefix, "suppa/atrtd2_F5/*.psivec"))
 ## Run the various processing functions on each list
 
 #####################
@@ -91,6 +94,11 @@ mySuppaEvents <- mapply(processSuppa, suppaList, suppaPsiVecList, fdr, dpsi, dcu
 mySuppaGenes <- mapply(processSuppa, suppaList, suppaPsiVecList, fdr, dpsi, dcut, events = FALSE, 
                        SIMPLIFY = FALSE)
 
+## Process the TPM > 5 files -- only fails on MX.. why? Because there are no
+## pvalues below 0.05! Therefore, we will exclude MX from the list.
+
+mySuppaEvents2 <- mapply(processSuppa, suppaList2, suppaPsiVecList2, fdr, dpsi, dcut, SIMPLIFY = FALSE)
+
 ## Create a table arranged by dPSI
 paulaTableEventsSu <- bind_rows(mySuppaEvents) %>% dplyr::arrange(desc(abs(dPSI)))
 finalTableEventsSu <- left_join(paulaTableEventsSu, geneNames3, by = "GeneID")
@@ -98,6 +106,10 @@ write.table(finalTableEventsSu,
             file = paste0("AllEvents_ranked_by_dPSI_SUPPA_", 
                           dcut, ".txt"), quote = FALSE, sep = "\t", 
             row.names = FALSE)
+## For the TPM > 5
+paulaTableEventsSu2 <- bind_rows(mySuppaEvents2) %>% dplyr::arrange(desc(abs(dPSI)))
+finalTableEventsSu2 <- left_join(paulaTableEventsSu2, geneNames3, by = "GeneID")
+# only 25 events at this threshold. Maybe need to try TPM > 2
 
 ##########################################################################
 ## Venn diagram of unique genes across programs                          #
@@ -784,6 +796,13 @@ normCounts <- allNormalizedCounts %>% tbl_df() %>% mutate(GeneID = rowname) %>%
         select(GeneID, atRWT2S:atRKO3S)
 normCounts$baseMean <- rowMeans(normCounts[c(2:5)])
 
+## Log transform baseMean and plot histogram
+
+normCounts$logBaseMean <- log10(normCounts$baseMean)
+hist(normCounts$logBaseMean)
+ggplot(normCounts, aes(x=logBaseMean)) +
+        geom_histogram(binwidth=.5, colour="black", fill="white")
+
 ## Join to each AS's program finalTable
 
 finalSpladderGeneExpCounts <- left_join(finalTableEventsSpAll, normCounts, by = "GeneID")
@@ -791,7 +810,8 @@ finalSuppaGeneExpCounts <- left_join(finalTableEventsSuAll, normCounts, by = "Ge
 finalRMatsGeneExpCounts <- left_join(separatedRmats, normCounts, by = "GeneID")
 
 ## Now, filter the tables based on gene expression. The gene should be moderately 
-## expressed in at least one condition!
+## expressed in at least one condition! Perhaps better to filter such that each replicate should
+## be expressed at greater than threshold.
 
 basemean.thresh <- 500
 
@@ -848,3 +868,44 @@ sum(jSpliceVec %in% finalSuppaGeneExpCounts$GeneID)
 jSpliceVec[jSpliceVec %in% finalSuppaGeneExpCounts$GeneID]
 # [1] "AT3G59430" "AT4G01550" "AT4G30570" "AT1G18750" "AT1G79245" "AT1G63670" "AT3G06210"
 # [8] "AT5G45710" "AT2G28940" "AT1G27630" "AT2G01730"
+
+## Read in 25% inclusion jSplice run
+## Filter file on command line:
+## cat jSplice_inc25_html_to_txt.txt | awk 'NF > 2' | grep -v "Unknown" | awk 'BEGIN {FS = "|"}; 
+## {print $1"\t"$2}' | cut -f 1,3,4,5,6,7,8 > jSplice_inc25.clean.txt
+## add variables in excel: 
+## GeneID	Type	meanLog2wt.ko	maxLog2wt.ko.B	maxLog2wt.ko.A	FDRB	FDRA
+
+## read in file and filter on FDR 
+loc <- "~/Downloads/results/jSplice25.csv"
+jSplice25 <- tbl_df(read.csv(loc, stringsAsFactors = FALSE)) %>% 
+        filter(FDRB < 0.05 & FDRA < 0.05)
+
+## Create vector of geneIDs and see overlap with other programs
+jSpliceVec <- jSplice25$GeneID
+
+sum(jSpliceVec %in% finalSpladderGeneExpCounts$GeneID)
+# 1 in common with spladder
+jSpliceVec[jSpliceVec %in% finalSpladderGeneExpCounts$GeneID]
+# [1] "AT1G61240"
+
+## rMATS
+sum(jSpliceVec %in% finalRMatsGeneExpCounts$GeneID)
+# 12 in common with rMATs
+jSpliceVec[jSpliceVec %in% finalRMatsGeneExpCounts$GeneID]
+# [1] "AT4G39030" "AT3G59430" "AT4G22350" "AT3G13570" "AT2G17730" "AT1G11960" "AT5G65685" "AT3G22990" "AT5G50780"
+# [10] "AT3G27870" "AT2G20950" "AT1G13990"
+
+## SUPPA
+sum(jSpliceVec %in% finalSuppaGeneExpCounts$GeneID)
+# 20
+jSpliceVec[jSpliceVec %in% finalSuppaGeneExpCounts$GeneID]
+# [1] "AT1G68690" "AT4G39030" "AT3G59430" "AT4G01550" "AT1G14590" "AT4G30570" "AT4G32480" "AT1G11960" "AT5G24910"
+# [10] "AT1G61240" "AT1G76570" "AT3G22990" "AT4G39350" "AT5G61830" "AT1G63670" "AT4G29000" "AT2G41720" "AT2G20950"
+# [19] "AT1G44446" "AT3G26730"
+
+sharedJspliceAndRmatsandSuppa <- intersect(jSpliceVec[jSpliceVec %in% finalRMatsGeneExpCounts$GeneID], 
+          jSpliceVec[jSpliceVec %in% finalSuppaGeneExpCounts$GeneID])
+
+# [1] "AT4G39030" "AT3G59430" "AT1G11960" "AT3G22990" "AT2G20950"
+
