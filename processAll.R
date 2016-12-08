@@ -799,27 +799,95 @@ normCounts$baseMean <- rowMeans(normCounts[c(2:5)])
 ## Log transform baseMean and plot histogram
 
 normCounts$logBaseMean <- log10(normCounts$baseMean)
-hist(normCounts$logBaseMean)
+
 ggplot(normCounts, aes(x=logBaseMean)) +
-        geom_histogram(binwidth=.5, colour="black", fill="white")
+        geom_histogram(binwidth=.25, colour="black", fill="white") +
+        geom_vline(xintercept = 2, colour = "green") +
+        labs(title = "Distribution of DeSeq2 log transformed normalized counts")
+
+## bimodal distribution 
+
+## try plotly
+library(plotly)
+
+plot_ly(alpha = 0.3) %>%
+        add_histogram(x = ~log(normCounts$atRWT2S)) %>%
+        add_histogram(x = ~log(normCounts$atRWT3S)) %>%
+        add_histogram(x = ~log(normCounts$atRKO1S)) %>%
+        add_histogram(x = ~log(normCounts$atRKO3S)) %>%
+        layout(barmode = "overlay")
 
 ## Join to each AS's program finalTable
 
 finalSpladderGeneExpCounts <- left_join(finalTableEventsSpAll, normCounts, by = "GeneID")
-finalSuppaGeneExpCounts <- left_join(finalTableEventsSuAll, normCounts, by = "GeneID")
+finalSuppaGeneExpCounts <- left_join(finalTableEventsSu, normCounts, by = "GeneID")
 finalRMatsGeneExpCounts <- left_join(separatedRmats, normCounts, by = "GeneID")
+
+## Plot logBaseMean vs dPSI for spladder
+
+tmp <- data.frame(x = finalSpladderGeneExpCounts$logBaseMean, y = abs(finalSpladderGeneExpCounts$dPSI))
+
+ggplot(tmp, aes(x = x, y = y ) ) + geom_point() +
+        labs(title = "logBaseMean versus dPSI for Spladder Events", 
+             x = "Log Base Mean", y = "absolulte dPSI") + geom_smooth()
+
+## now for suppa
+tmp <- data.frame(x = finalSuppaGeneExpCounts$logBaseMean, y = abs(finalSuppaGeneExpCounts$dPSI))
+
+ggplot(tmp, aes(x = x, y = y ) ) + geom_point() +
+        labs(title = "logBaseMean versus dPSI for Suppa Events", 
+             x = "Log Base Mean", y = "absolulte dPSI") + geom_smooth()
+
+## now for rmats
+tmp <- data.frame(x = finalRMatsGeneExpCounts$logBaseMean, y = abs(finalRMatsGeneExpCounts$IncLevelDifference))
+#tmp2 <- data.frame(x = finalRMatsGeneExpCounts$baseMean, y = abs(finalRMatsGeneExpCounts$IncLevelDifference))
+ggplot(tmp, aes(x = x, y = y ) ) + geom_point() +
+        labs(title = "logBaseMean versus dPSI for rMATS Events", 
+             x = "Log Base Mean", y = "absolulte dPSI") + geom_smooth()
+
+#ggplot(tmp2, aes(x = x, y = y ) ) + geom_point() +
+#       labs(title = "BaseMean versus dPSI for rMATS Events", 
+#             x = "Base Mean", y = "absolulte dPSI") + geom_smooth()
 
 ## Now, filter the tables based on gene expression. The gene should be moderately 
 ## expressed in at least one condition! Perhaps better to filter such that each replicate should
 ## be expressed at greater than threshold.
 
 basemean.thresh <- 500
+## log of basemean threshold
+logbm <- 2
 
 filteredSpladder <- finalSpladderGeneExpCounts %>% 
         filter(baseMean > basemean.thresh) %>% 
         filter(baseMean < 1000)
 
-plot(filteredSpladder$baseMean, filteredSpladder$dPSI)
+## Get retained introns
+filteredSpladderRI <- finalSpladderGeneExpCounts %>% 
+        filter(logBaseMean > logbm) %>%
+        filter(grepl("intron_retention", event_id))
+
+## Get skipped exons
+filteredSpladderSE <- finalSpladderGeneExpCounts %>% 
+        filter(logBaseMean > logbm) %>%
+        filter(grepl("exon_skip", event_id))
+
+
+## remove NA columns
+filteredSpladderRI <- filteredSpladderRI[colSums(!is.na(filteredSpladderRI)) > 0]
+filteredSpladderSE <- filteredSpladderSE[colSums(!is.na(filteredSpladderSE)) > 0]
+
+## consider only genes that have an intron coverage difference > 
+## intron_cov: mean coverage of the retained intron
+
+filteredSpladderRI$absCovDiff <- 
+        abs((filteredSpladderRI$atRWT2S.intron_cov + filteredSpladderRI$atRWT3S.intron_cov) / 2 -
+                    (filteredSpladderRI$atRKO1S.intron_cov + filteredSpladderRI$atRKO3S.intron_cov) / 2)
+
+SpladderRI.20 <- filteredSpladderRI %>% filter(absCovDiff > 20)
+SpladderRI.15 <- filteredSpladderRI %>% filter(absCovDiff > 15)
+SpladderRI.10 <- filteredSpladderRI %>% filter(absCovDiff > 10)
+
+plot(filteredSpladderRI$logBaseMean, filteredSpladderRI$dPSI)
 hist(filteredSpladder$baseMean, bins )
 
 filteredSuppa <- finalSuppaGeneExpCounts %>%
@@ -830,6 +898,13 @@ filteredRmats <- finalRMatsGeneExpCounts %>%
         arrange(desc(baseMean, IncLevelDifference)) %>%
         select(ID, GeneID, Type, IncLevelDifference, baseMean) %>%
         filter(Type == "RI")
+
+filteredRmatsRI <- finalRMatsGeneExpCounts %>%
+        filter(logBaseMean > 2.5) %>%
+        arrange(desc(IncLevelDifference)) %>%
+        select(ID, GeneID, Type, IncLevelDifference, baseMean) %>%
+        filter(Type == "RI")
+
 
 ## The above is nice, but I think I need to somehow involve junction read counts
 
