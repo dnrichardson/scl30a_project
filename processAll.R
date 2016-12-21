@@ -908,7 +908,7 @@ filteredRmatsRI <- finalRMatsGeneExpCounts %>%
 
 ## The above is nice, but I think I need to somehow involve junction read counts
 
-## jSplice results
+## jSplice results ############################################################
 ## Read in jSplice data that has been pre-processed by hand to remove spurious, 
 ## aggregated ASMs
 ## cat tmp.50.txt | grep -v "Unknown"| awk 'BEGIN {FS = "|"}; {print $1"\t"$2}' 
@@ -952,12 +952,22 @@ jSpliceVec[jSpliceVec %in% finalSuppaGeneExpCounts$GeneID]
 ## GeneID	Type	meanLog2wt.ko	maxLog2wt.ko.B	maxLog2wt.ko.A	FDRB	FDRA
 
 ## read in file and filter on FDR 
-loc <- "~/Downloads/results/jSplice25.csv"
+loc <- "~/Dropbox/Current/newscl30a/scl30a_project/jSplice_Results/jSplice25.csv"
 jSplice25 <- tbl_df(read.csv(loc, stringsAsFactors = FALSE)) %>% 
         filter(FDRB < 0.05 & FDRA < 0.05)
 
+jSplice25 <- left_join(jSplice25, geneNames3, by = "GeneID")
+
+## output table for excel
+write.table(jSplice25, file = "jSplice25.tsv", quote = FALSE, row.names = FALSE,
+            sep = "\t")
+
 ## Create vector of geneIDs and see overlap with other programs
 jSpliceVec <- jSplice25$GeneID
+
+## Check overlap with DEGs
+intersect(DEGs$ID, jSplice25$GeneID)
+# [1] "AT3G13570" (SCL30a)
 
 sum(jSpliceVec %in% finalSpladderGeneExpCounts$GeneID)
 # 1 in common with spladder
@@ -983,4 +993,5 @@ sharedJspliceAndRmatsandSuppa <- intersect(jSpliceVec[jSpliceVec %in% finalRMats
           jSpliceVec[jSpliceVec %in% finalSuppaGeneExpCounts$GeneID])
 
 # [1] "AT4G39030" "AT3G59430" "AT1G11960" "AT3G22990" "AT2G20950"
+
 
