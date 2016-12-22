@@ -86,6 +86,11 @@ write.table(finalTableEventsSp,
             file = paste0("AllEvents_ranked_by_dPSI_spladder_dcut_", 
                           dcut, ".txt"), quote = FALSE, sep = "\t", 
             row.names = FALSE)
+write.table(finalTableEventsSpAll, 
+            file = paste0("AllEvents_ranked_by_dPSI_spladder_dcut_", 
+                          dcut, ".txt"), quote = FALSE, sep = "\t", 
+            row.names = FALSE)
+
 
 #####################
 ## Suppa processing #
@@ -958,9 +963,14 @@ jSplice25 <- tbl_df(read.csv(loc, stringsAsFactors = FALSE)) %>%
 
 jSplice25 <- left_join(jSplice25, geneNames3, by = "GeneID")
 
+## Attach basemean counts
+jSplice25 <- left_join(jSplice25, normCounts, by = "GeneID")
+
 ## output table for excel
 write.table(jSplice25, file = "jSplice25.tsv", quote = FALSE, row.names = FALSE,
             sep = "\t")
+
+ggplot(jSplice25, aes(x = logBaseMean ) ) + geom_histogram() 
 
 ## Create vector of geneIDs and see overlap with other programs
 jSpliceVec <- jSplice25$GeneID
@@ -993,5 +1003,54 @@ sharedJspliceAndRmatsandSuppa <- intersect(jSpliceVec[jSpliceVec %in% finalRMats
           jSpliceVec[jSpliceVec %in% finalSuppaGeneExpCounts$GeneID])
 
 # [1] "AT4G39030" "AT3G59430" "AT1G11960" "AT3G22990" "AT2G20950"
+
+##############################################################
+# FILTERING SPLADDER RESULTS ACCORDING TO jSPLICE PARAMETERS #
+##############################################################
+
+### Filtering spladder table based on min log2baseMean of 2.0 (equivalent to lowest baseMean in jSplice)
+stringentSpladder <- finalSpladderGeneExpCounts %>% filter(logBaseMean > 2)
+
+## Let's filter retained introns only and apply similar jSplice count threshold (20)
+## intron_conf: number of spliced alignments spanning the intron
+## will need to filter so that I catch the cases where RI is in the WT but not in KO and vice
+## versa
+
+RI_stringentSpladder <- stringentSpladder %>% filter(Type == "intron_retention")
+
+RI_WT_events <- RI_stringentSpladder %>% filter(atRWT2S.intron_conf > 20, atRWT3S.intron_conf > 20)
+RI_WT_events <- RI_stringentSpladder %>% filter(atRKO1S.intron_conf > 20, atRKO3S.intron_conf > 20)
+
+## Filter exon skipping cases, exon_pre_exon_aft_conf: number of spliced alignments spanning from left
+## flanking to right flanking exon. 
+
+## PROBLEM! The exon_pr_exon_aft_conf variable does not exist in my data. FRUSTRATING INCONCISTENCY
+## WITH THE SPLADDER WIKI AND THE OUTPUT DATA. However, after closer inspection in IGV, intron_skip_conf is 
+## equivalent to junction spanning reads that support skipping of the exon in question. AT4G13460 is
+## a good example.
+
+## remove NA only columns as well
+ES_stringentSpladder <- stringentSpladder %>% filter(Type == "exon_skip") %>% 
+        select_if(colSums(!is.na(.)) > 0)
+
+ES_WT_events <- ES_stringentSpladder %>% filter(atRWT2S.intron_skip_conf > 20, atRWT3S.intron_skip_conf > 20)
+ES_KO_events <- ES_stringentSpladder %>% filter(atRKO1S.intron_skip_conf > 20, atRKO3S.intron_skip_conf > 20)
+
+## remove artefactual events based on crazy read alignments in IGV, i.e. reads that span huge distances
+## Some of these reads span > 500,000 bases. HUGE insert sizes. Why?
+## Furthermore, HSC70-1 has almost 120k reads mapped to it. Will exclude.
+ES_KO_events <- ES_KO_events %>% filter(gene_name != "AT2G08986", gene_name != "AT2G07981",
+                                        gene_name != "AT5G02500")
+ES_WT_events <- ES_WT_events %>% filter(gene_name != "AT2G08986", gene_name != "AT2G07981",
+                                        gene_name != "AT5G02500")
+
+outersect <- function(x, y) {
+        sort(c(setdiff(x, y),
+               setdiff(y, x)))
+}
+
+## Get genes in WT ES events not in KO ES events
+outersect(ES_KO_events$gene_name, ES_WT_events$gene_name)
+setdiff(ES_WT_events$gene_name, ES_KO_events$gene_name )
 
 
