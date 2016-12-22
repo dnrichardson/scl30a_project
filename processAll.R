@@ -1053,4 +1053,36 @@ outersect <- function(x, y) {
 outersect(ES_KO_events$gene_name, ES_WT_events$gene_name)
 setdiff(ES_WT_events$gene_name, ES_KO_events$gene_name )
 
+## Now to filter the A5 and A3 events
+A5_stringentSpladder <- stringentSpladder %>% filter(Type == "alt_5prime", gene_name != "AT2G08986", 
+                                                     gene_name != "AT2G07981",
+                                                     gene_name != "AT5G02500") %>% 
+        select_if(colSums(!is.na(.)) > 0)
 
+A3_stringentSpladder <- stringentSpladder %>% filter(Type == "alt_3prime", gene_name != "AT2G08986", 
+                                                     gene_name != "AT2G07981",
+                                                     gene_name != "AT5G02500") %>% 
+        select_if(colSums(!is.na(.)) > 0)
+
+A5_WT_events <- A5_stringentSpladder %>% 
+        filter(atRWT2S.intron1_conf > 20, atRWT3S.intron2_conf > 20)
+
+A5_KO_events <- A5_stringentSpladder %>% 
+        filter(atRKO1S.intron1_conf > 20, atRKO3S.intron2_conf > 20)
+
+A3_WT_events <- A3_stringentSpladder %>% 
+        filter(atRWT2S.intron1_conf > 20, atRWT3S.intron2_conf > 20)
+
+A3_KO_events <- A3_stringentSpladder %>% 
+        filter(atRKO1S.intron1_conf > 20, atRKO3S.intron2_conf > 20)
+
+## Mult_ex skip
+
+multES_stringentSpladder <- stringentSpladder %>% filter(Type == "mult_exon_skip", gene_name != "AT2G08986", 
+                                                         gene_name != "AT2G07981",
+                                                         gene_name != "AT5G02500") %>% 
+        select_if(colSums(!is.na(.)) > 0)
+
+multES_stringentSpladder %>% select(contains("_conf")) %>% select_if(colSums(.) > 20)
+
+# No gene satisfying criteria
