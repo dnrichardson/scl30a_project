@@ -1016,10 +1016,13 @@ stringentSpladder <- finalSpladderGeneExpCounts %>% filter(logBaseMean > 2)
 ## will need to filter so that I catch the cases where RI is in the WT but not in KO and vice
 ## versa
 
-RI_stringentSpladder <- stringentSpladder %>% filter(Type == "intron_retention")
+RI_stringentSpladder <- stringentSpladder %>% filter(Type == "intron_retention") %>% 
+        select_if(colSums(!is.na(.)) > 0) %>% 
+        filter(gene_name != "AT2G08986", gene_name != "AT2G07981",
+                                                 gene_name != "AT5G02500")
 
 RI_WT_events <- RI_stringentSpladder %>% filter(atRWT2S.intron_conf > 20, atRWT3S.intron_conf > 20)
-RI_WT_events <- RI_stringentSpladder %>% filter(atRKO1S.intron_conf > 20, atRKO3S.intron_conf > 20)
+RI_KO_events <- RI_stringentSpladder %>% filter(atRKO1S.intron_conf > 20, atRKO3S.intron_conf > 20)
 
 ## Filter exon skipping cases, exon_pre_exon_aft_conf: number of spliced alignments spanning from left
 ## flanking to right flanking exon. 
