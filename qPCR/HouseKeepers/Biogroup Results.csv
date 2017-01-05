@@ -1,0 +1,14 @@
+# Analysis Group Name : Default Analysis Group
+# Description : Including all applicable data files.
+# Created By :dalesan@gmail.com
+# Last Modified Date : 2016-11-30 10:02:51 AM
+# Number of Experiments in Analysis Group : 1
+# List of instrument types in the study that are imported : QuantStudio 7 Real-Time PCR System
+# Normalization method : Endogenous Control = ACT2
+# Reference Sample : KOC
+# Reference Group : 
+# Max CT : 40.0
+# Confidence Level : 95.0
+
+"Bio Group Name","Target Name","Mean Equivalent Cq","Mean Adjusted Equivalent Cq","Mean DCq","DCq SE","Mean L-Quant","Mean Adjusted L-Quant","Mean N-Quant","Sigma N-Quant","F Factor","DDCq","DDCq - Fsigma","DDCq + Fsigma","Rq","Rq Min","Rq Max","Corrected P-Value",
+

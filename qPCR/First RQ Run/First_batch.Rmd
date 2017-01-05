@@ -1,0 +1,414 @@
+---
+title: "First RQ of SCL30a DEGs"
+author: "Dale Richardson"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output: 
+        html_document:
+                keep_md: true
+                toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## Description
+Here I will experiment with the [https://cran.r-project.org/web/packages/MCMC.qpcr/index.html](MCMC qPCR package) from Mikhail V. Matz. 
+
+From the Reference Manual:
+
+*Quantitative RT-PCR data are analyzed using generalized linear mixed models based on lognormal-Poisson error distribution, fitted using MCMC. Control genes are not required but can be incorporated as Bayesian priors or, when template abundances correlate with conditions, as trackers of global effects (common to all genes). The package also implements a lognormal model for higher-abundance data and a "classic" model involving multigene normalization on a by-sample basis. Several plotting functions are included to extract and visualize results. The detailed tutorial is available here: <http://bit.ly/1Nwo4CB>.*
+
+## Data processing
+
+```{r, message = FALSE, warning = FALSE}
+## load the MCMC qpcr package, dplyr and tidyr
+library(MCMC.qpcr)
+library(dplyr)
+library(tidyr)
+
+## read in the qpcr input data files
+## Skip the first 11 lines, which contain comments and set na.strings
+myData <- read.csv("Well\ Results.csv", header = TRUE, skip = 11, na.strings = c("","-", "Undetermined")) %>% 
+        select(sample = Sample.Name, gene = Target.Name, Cq) %>%
+        filter(sample != "No Sample", gene!= "GA20")
+
+## write out simpler output
+write.csv(myData, file = "tmp.csv", row.names = FALSE, quote = FALSE)
+
+```
+
+With the file, `tmp.csv`, I have used excel to rearrange the data so that it is in a wider format in accordance with the example data frame of the MCMC.qpcr tutorial. This file is called, `mcmc_formatted_RQ.csv`. I should spend some time doing this in R so that the analysis is fully reproducible...
+
+```{r, message = FALSE}
+## load in the processed csv files
+## efficiencies
+eff <- read.csv("efficiency_updated.csv", header = TRUE, stringsAsFactors = FALSE)
+
+## cqs
+rq.data <- read.csv("mcmc_formatted_RQ.csv", header = TRUE, stringsAsFactors = FALSE)
+#rq.data <- read.csv("proper_sample_col.csv", header = TRUE, stringsAsFactors = FALSE)
+```
+
+From the tutorial:
+
+*Recalculating the data into molecule counts and reformatting:
+One of the central ideas of the MCMC.qpcr methodology is to treat qPCR data as molecule count data. Function `cq2counts()` does the reformatting. It needs to be told the name of the main dataset, the name of efficiencies dataset, and also which columns correspond to the actual qPCR data for genes (‘genecols‘) and which columns contain experimental conditions (‘condcols‘):
+`qs=cq2counts(data=beckham.data, effic=beckham.eff, genecols=c(4:13),condcols=c(1:3))`*
+
+## Running the model
+```{r, include = TRUE, message = FALSE, cache = TRUE}
+#, results = "hide"
+## recalculate data into molecule counts and reformat
+qs <- cq2counts(data = rq.data, effic = eff, genecols = c(4:13), condcols = c(1:3), Cq1 = 39)
+
+# on previous runs, i saw that the plateau of acceptance values was reached at iteration 6000.
+# therefore, I need to change the nitt=16000 and burnin=6000.
+# hiding the model sanity check output
+informed_d <- mcmc.qpcr(
+        fixed = "genotype+condition",
+        random = "sample",
+        data = qs,
+        controls = c("ef1a", "ubc21"),
+        m.fix = 1.2,
+        pr = TRUE,
+        pl = TRUE,
+        nitt = 16000,
+        burnin = 6000
+)
+
+## soft normalization
+ # norms <- mcmc.qpcr(
+ #         fixed = "genotype+condition",
+ #         random = "sample",
+ #         data = qs,
+ #         controls = c("ef1a", "ubc21"),
+ #         m.fix = 1.2,
+ #         pr = TRUE,
+ #         pl = TRUE,
+ #         nitt = 16000,
+ #         burnin = 6000,
+ #         normalize = TRUE
+ # )
+```
+
+## Diagnostic check if linear modeling approach is valid
+```{r check_model, cache = TRUE}
+## check if linear modeling approach is valid
+## residuaals vs predicted should show no trend, if does then data are not linear
+## size of residuals should not change depending on predicted value (test for equal variances across the modeled range)
+## residuals should be approximately normally distributed
+
+diagnostic.mcmc(
+        model = informed_d,
+        col = "grey50",
+        cex = 0.8
+)
+
+# diagnostic.mcmc(
+#         model = norms,
+#         col = "grey50",
+#         cex = 0.8
+# )
+```
+
+From the above plots, it appears that the linear modeling approach is indeed valid.
+
+## Gene expression plots
+I still need to annotate the resulting plots with asterisks to denote signficance. 
+
+```{r, message = FALSE}
+## trellisbyGene
+smm2 <- HPDsummary(informed_d,qs,xgroup="genotype")
+#smm.norms <- HPDsummary(norms, qs, xgroup = "genotype")
+#
+trellisByGene(smm2,xFactor="genotype",groupFactor="condition")+xlab("genotype")
+#trellisByGene(smm.norms,xFactor="genotype",groupFactor="condition")+xlab("genotype")
+
+## test plots
+## housekeepers only
+# HPDsummary(model = informed_d, data = qs, xgroup = "genotype", genes = c("ef1a", "ubc21"), x.order = c("KO", "WT", "OX"))
+
+## now one by one
+# HPDsummary(model = informed_d, data = qs, xgroup = "genotype", genes = c("retro"),
+#            x.order = c("KO", "WT", "OX"))
+# HPDsummary(model = informed_d, data = qs, xgroup = "genotype", genes = c("sesa4"),
+#            x.order = c("KO", "WT", "OX"))
+# HPDsummary(model = informed_d, data = qs, xgroup = "genotype", genes = c("sesa5"),
+#            x.order = c("KO", "WT", "OX"))
+# HPDsummary(model = informed_d, data = qs, xgroup = "genotype", genes = c("m17"),
+#            x.order = c("KO", "WT", "OX"))
+# HPDsummary(model = informed_d, data = qs, xgroup = "genotype", genes = c("epr1"),
+#            x.order = c("KO", "WT", "OX"))
+# HPDsummary(model = informed_d, data = qs, xgroup = "genotype", genes = c("pecl"),
+#            x.order = c("KO", "WT", "OX"))
+# HPDsummary(model = informed_d, data = qs, xgroup = "genotype", genes = c("cru3"),
+#            x.order = c("KO", "WT", "OX"))
+# HPDsummary(model = informed_d, data = qs, xgroup = "genotype", genes = c("dormaux"),
+#            x.order = c("KO", "WT", "OX"))
+
+## filtering
+## get the plotting data out of the summary object
+ggplotData <- smm2$ggPlot$data
+## refactor to put genotype in right order
+ggplotData$genotype <- factor(ggplotData$genotype, levels = c("KO", "WT", "OX"))
+
+## pull out individual genes
+retro <- ggplotData %>% filter(gene == "retro")
+## get pvalues, include NA for the WT v WT comparisons
+retro$pvalue <- smm2$geneWise$retro[lower.tri(smm2$geneWise$retro, diag = TRUE)][c(5,11,14,18,1,1)]
+## assign star labels
+retro$star <- ""
+retro$star[retro$pvalue <= 0.05] <- "*"
+retro$star[retro$pvalue <= 0.01] <- "**"
+retro$star[retro$pvalue <= 0.001] <- "***"
+
+cru3 <- ggplotData %>% filter(gene == "cru3")
+## get pvalues
+cru3$pvalue <- smm2$geneWise$cru3[lower.tri(smm2$geneWise$cru3, diag = TRUE)][c(5,11,14,18,1,1)]
+## assign star labels
+cru3$star <- ""
+cru3$star[cru3$pvalue <= 0.05] <- "*"
+cru3$star[cru3$pvalue <= 0.01] <- "**"
+cru3$star[cru3$pvalue <= 0.001] <- "***"
+
+sesa4 <- ggplotData %>% filter(gene == "sesa4")
+## get pvalues
+sesa4$pvalue <- smm2$geneWise$sesa4[lower.tri(smm2$geneWise$sesa4, diag = TRUE)][c(5,11,14,18,1,1)]
+## assign star labels
+sesa4$star <- ""
+sesa4$star[sesa4$pvalue <= 0.05] <- "*"
+sesa4$star[sesa4$pvalue <= 0.01] <- "**"
+sesa4$star[sesa4$pvalue <= 0.001] <- "***"
+
+sesa5 <- ggplotData %>% filter(gene == "sesa5")
+## get pvalues
+sesa5$pvalue <- smm2$geneWise$sesa5[lower.tri(smm2$geneWise$sesa5, diag = TRUE)][c(5,11,14,18,1,1)]
+## assign star labels
+sesa5$star <- ""
+sesa5$star[sesa5$pvalue <= 0.05] <- "*"
+sesa5$star[sesa5$pvalue <= 0.01] <- "**"
+sesa5$star[sesa5$pvalue <= 0.001] <- "***"
+
+m17 <- ggplotData %>% filter(gene == "m17")
+## get pvalues
+m17$pvalue <- smm2$geneWise$m17[lower.tri(smm2$geneWise$m17, diag = TRUE)][c(5,11,14,18,1,1)]
+## assign star labels
+m17$star <- ""
+m17$star[m17$pvalue <= 0.05] <- "*"
+m17$star[m17$pvalue <= 0.01] <- "**"
+m17$star[m17$pvalue <= 0.001] <- "***"
+
+epr1 <- ggplotData %>% filter(gene == "epr1")
+## get pvalues
+epr1$pvalue <- smm2$geneWise$epr1[lower.tri(smm2$geneWise$epr1, diag = TRUE)][c(5,11,14,18,1,1)]
+## assign star labels
+epr1$star <- ""
+epr1$star[epr1$pvalue <= 0.05] <- "*"
+epr1$star[epr1$pvalue <= 0.01] <- "**"
+epr1$star[epr1$pvalue <= 0.001] <- "***"
+
+pecl <- ggplotData %>% filter(gene == "pecl")
+## get pvalues
+pecl$pvalue <- smm2$geneWise$pecl[lower.tri(smm2$geneWise$pecl, diag = TRUE)][c(5,11,14,18,1,1)]
+## assign star labels
+pecl$star <- ""
+pecl$star[pecl$pvalue <= 0.05] <- "*"
+pecl$star[pecl$pvalue <= 0.01] <- "**"
+pecl$star[pecl$pvalue <= 0.001] <- "***"
+
+dormaux <- ggplotData %>% filter(gene == "dormaux")
+## get pvalues
+dormaux$pvalue <- smm2$geneWise$dormaux[lower.tri(smm2$geneWise$dormaux, diag = TRUE)][c(5,11,14,18,1,1)]
+## assign star labels
+dormaux$star <- ""
+dormaux$star[dormaux$pvalue <= 0.05] <- "*"
+dormaux$star[dormaux$pvalue <= 0.01] <- "**"
+dormaux$star[dormaux$pvalue <= 0.001] <- "***"
+
+```
+## Individual Gene Plots non-normalized
+```{r individual_plots}
+ggplot(retro, aes(x = genotype, y = mean, colour = condition, group = condition)) + 
+        geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.1) +
+        scale_color_manual(values=c("#00BFC4", "#F8766D")) +
+        geom_point(size = 3) +
+        #geom_text(aes(label = star, y = upper + 0.2), colour = "black", size = 5) +
+        ylab("log2(abundance)") +
+        ggtitle("retro") +
+        theme_bw() +
+        theme(plot.title = element_text(size = 20, hjust=0.5), panel.grid.major.x = element_blank())
+ 
+ggplot(cru3, aes(x = genotype, y = mean, colour = condition, group = condition)) + 
+        geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.1) +
+        scale_color_manual(values=c("#00BFC4", "#F8766D")) +
+        geom_point(size = 3) +
+        #geom_text(aes(label = star, y = upper + 0.2), colour = "black", size = 5) +
+        ylab("log2(abundance)") +
+        ggtitle("cru3") +
+        theme_bw() +
+        theme(plot.title = element_text(size = 20, hjust=0.5))
+
+ggplot(sesa4, aes(x = genotype, y = mean, colour = condition, group = condition)) + 
+        geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.1) +
+        scale_color_manual(values=c("#00BFC4", "#F8766D")) +
+        geom_point(size = 3) +
+        #geom_text(aes(label = star, y = upper + 0.2), colour = "black", size = 5) +
+        ylab("log2(abundance)") +
+        ggtitle("sesa4") +
+        theme_bw() +
+        theme(plot.title = element_text(size = 20, hjust=0.5))
+
+ggplot(sesa5, aes(x = genotype, y = mean, colour = condition, group = condition)) + 
+        geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.1) +
+        scale_color_manual(values=c("#00BFC4", "#F8766D")) +
+        geom_point(size = 3) +
+        #geom_text(aes(label = star, y = upper + 0.2), colour = "black", size = 5) +
+        ylab("log2(abundance)") +
+        ggtitle("sesa5") +
+        theme_bw() +
+        theme(plot.title = element_text(size = 20, hjust=0.5))
+
+ggplot(m17, aes(x = genotype, y = mean, colour = condition, group = condition)) + 
+        geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.1) +
+        scale_color_manual(values=c("#00BFC4", "#F8766D")) +
+        geom_point(size = 3) +
+        #geom_text(aes(label = star, y = upper + 0.2), colour = "black", size = 5) +
+        ylab("log2(abundance)") +
+        ggtitle("m17") +
+        theme_bw() +
+        theme(plot.title = element_text(size = 20, hjust=0.5))
+
+ggplot(epr1, aes(x = genotype, y = mean, colour = condition, group = condition)) + 
+        geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.1) +
+        scale_color_manual(values=c("#00BFC4", "#F8766D")) +
+        geom_point(size = 3) +
+        #geom_text(aes(label = star, y = upper + 0.2), colour = "black", size = 5) +
+        ylab("log2(abundance)") +
+        ggtitle("epr1") +
+        theme_bw() +
+        theme(plot.title = element_text(size = 20, hjust=0.5))
+
+ggplot(pecl, aes(x = genotype, y = mean, colour = condition, group = condition)) + 
+        geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.1) +
+        scale_color_manual(values=c("#00BFC4", "#F8766D")) +
+        geom_point(size = 3) +
+        #geom_text(aes(label = star, y = upper + 0.2), colour = "black", size = 5) +
+        ylab("log2(abundance)") +
+        ggtitle("pecl") +
+        theme_bw() +
+        theme(plot.title = element_text(size = 20, hjust=0.5))
+
+ggplot(dormaux, aes(x = genotype, y = mean, colour = condition, group = condition)) + 
+        geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.1) +
+        scale_color_manual(values=c("#00BFC4", "#F8766D")) +
+        geom_point(size = 3) +
+        #geom_text(aes(label = star, y = upper + 0.2), colour = "black", size = 5) +
+        ylab("log2(abundance)") +
+        ggtitle("dormaux") +
+        theme_bw() +
+        theme(plot.title = element_text(size = 20, hjust=0.5))
+ 
+```
+
+
+```{r individual_plots_normalized, eval=FALSE, include=FALSE}
+## filtering
+## get the plotting data out of the summary object
+ggplotData <- smm.norms$ggPlot$data
+## refactor to put genotype in right order
+ggplotData$genotype <- factor(ggplotData$genotype, levels = c("KO", "WT", "OX"))
+
+## pull out individual genes
+retro <- ggplotData %>% filter(gene == "retro")
+cru3 <- ggplotData %>% filter(gene == "cru3")
+sesa4 <- ggplotData %>% filter(gene == "sesa4")
+sesa5 <- ggplotData %>% filter(gene == "sesa5")
+m17 <- ggplotData %>% filter(gene == "m17")
+epr1 <- ggplotData %>% filter(gene == "epr1")
+pecl <- ggplotData %>% filter(gene == "pecl")
+dormaux <- ggplotData %>% filter(gene == "dormaux")
+
+ggplot(retro, aes(x = genotype, y = mean, colour = condition, group = condition)) + 
+        geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.1) +
+        #geom_line() +
+        geom_point(size = 3) +
+        ylab("log2(abundance)") +
+        ggtitle("retro") +
+        theme_bw() +
+        theme(plot.title = element_text(size = 20, hjust=0.5))
+ 
+ggplot(cru3, aes(x = genotype, y = mean, colour = condition, group = condition)) + 
+        geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.1) +
+        #geom_line() +
+        geom_point(size = 3) +
+        ylab("log2(abundance)") +
+        ggtitle("cru3") +
+        theme_bw() +
+        theme(plot.title = element_text(size = 20, hjust=0.5))
+
+ggplot(sesa4, aes(x = genotype, y = mean, colour = condition, group = condition)) + 
+        geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.1) +
+        #geom_line() +
+        geom_point(size = 3) +
+        ylab("log2(abundance)") +
+        ggtitle("sesa4") +
+        theme_bw() +
+        theme(plot.title = element_text(size = 20, hjust=0.5))
+
+ggplot(sesa5, aes(x = genotype, y = mean, colour = condition, group = condition)) + 
+        geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.1) +
+        #geom_line() +
+        geom_point(size = 3) +
+        ylab("log2(abundance)") +
+        ggtitle("sesa5") +
+        theme_bw() +
+        theme(plot.title = element_text(size = 20, hjust=0.5))
+
+ggplot(m17, aes(x = genotype, y = mean, colour = condition, group = condition)) + 
+        geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.1) +
+        #geom_line() +
+        geom_point(size = 3) +
+        ylab("log2(abundance)") +
+        ggtitle("m17") +
+        theme_bw() +
+        theme(plot.title = element_text(size = 20, hjust=0.5))
+
+ggplot(epr1, aes(x = genotype, y = mean, colour = condition, group = condition)) + 
+        geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.1) +
+        #geom_line() +
+        geom_point(size = 3) +
+        ylab("log2(abundance)") +
+        ggtitle("epr1") +
+        theme_bw() +
+        theme(plot.title = element_text(size = 20, hjust=0.5))
+
+ggplot(pecl, aes(x = genotype, y = mean, colour = condition, group = condition)) + 
+        geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.1) +
+        #geom_line() +
+        geom_point(size = 3) +
+        ylab("log2(abundance)") +
+        ggtitle("pecl") +
+        theme_bw() +
+        theme(plot.title = element_text(size = 20, hjust=0.5))
+
+ggplot(dormaux, aes(x = genotype, y = mean, colour = condition, group = condition)) + 
+        geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.1) +
+        #geom_line() +
+        geom_point(size = 3) +
+        ylab("log2(abundance)") +
+        ggtitle("dormaux") +
+        theme_bw() +
+        theme(plot.title = element_text(size = 20, hjust=0.5))
+ 
+```
+
+## Statistical significance
+```{r stat_sig}
+smm2$geneWise
+```
+
+## R session info
+```{r}
+sessionInfo()
+```
+

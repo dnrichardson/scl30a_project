@@ -1,0 +1,129 @@
+---
+title: "First_DEGs_analysis"
+author: "Dale Richardson"
+date: "12/29/2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Description
+This is my first attempt at analyzing the qPCR data generated for the first set of 10 genes `("ef1a","sesa4","m17","ubc21","epr1", "retro", "sesa5","pecl","dormaux" and "cru3")`.
+
+I will try analyzing the data with NormQPCR. 
+
+I have created a `.csv` file called `normqpcr_salt`, which contains only the Cqs for the salt-treated
+genotypes. I have also created a file called, `efficiencies_normq` that has the primer efficiencies
+for each of the genes in the `normqpcr_salt` file.
+
+I will be computing `NRQs` rather than use the ddCt method.
+
+```{r load_data, message = FALSE}
+## load the necessary packages
+library(NormqPCR)
+library(ReadqPCR)
+library(ggplot2)
+library(dplyr)
+library(tibble)
+library(tidyr)
+
+## read in the salt samples
+salt <- read.csv("normqpcr_salt.csv", header = TRUE, stringsAsFactors = FALSE)
+
+## create the inputfile for read.qPCR
+write.table(salt, file = "normqpcr_salt.txt", quote = FALSE, row.names = FALSE)
+## read in data
+Cq.data <- read.qPCR("normqpcr_salt.txt")
+
+test.Cq.data <- read.qPCR("test.txt")
+## combine "technical replicates" and compute standard deviations
+Cq.data1 <- combineTechRepsWithSD(Cq.data)
+
+## read in efficiencies
+Cq.effs <- read.table(file = "efficiencies_normq.txt", row.names = 1, header = TRUE)
+rownames(Cq.effs) <- featureNames(Cq.data1)
+effs(Cq.data1) <- as.matrix(Cq.effs[,"efficiency", drop = FALSE])
+se.effs(Cq.data1) <- as.matrix(Cq.effs[, "SD.efficiency", drop = FALSE])
+```
+
+Thus far, I have all the data loaded and I am ready to compute the normalized relative quantities. 
+I will now denote the two housekeeping genes and proceed with the computations.
+
+```{r compute_NRQs, message = FALSE}
+## compute NRQ
+res <- ComputeNRQs(Cq.data1, hkgs = c("ef1a", "ubc21"))
+exprs(res)
+
+## SD of NRQs
+se.exprs(res)
+
+## place NRQ expression values into a dataframe, create new 
+nrq.df <- as.data.frame(exprs(res)) %>% rownames_to_column(., "gene")
+nrq.se.df <- as.data.frame(se.exprs(res)) %>% rownames_to_column(., "gene")
+
+## go from wide to long 
+nrq.df.long <- nrq.df %>% gather(condition, NRQ, KOS:WTS)
+nrq.se.df.long <- nrq.se.df %>% gather(condition, se, KOS:WTS)
+
+## add the SEs to the nrq.df.long dataframe to make plotting easier
+nrq.df.long$se <- nrq.se.df.long$se
+
+
+```
+
+## Plots
+
+Here I will plot the NRQs using ggplot2. 
+
+```{r plots}
+cru3 <- nrq.df.long %>% filter(gene == "cru3")
+cru3$condition <- factor(cru3$condition, levels = c("KOS", "WTS", "OXS"))
+ggplot(cru3, aes(x = condition, y = NRQ, group = 1 )) + 
+        geom_errorbar(aes(ymin = NRQ - se, ymax = NRQ + se), width = 0.1) +
+        geom_line() +
+        geom_point() +
+        theme_bw()
+
+epr1 <- nrq.df.long %>% filter(gene == "epr1")
+ggplot(epr1, aes(x = condition, y = NRQ, group = 1 )) + 
+        geom_errorbar(aes(ymin = NRQ - se, ymax = NRQ + se), width = 0.1) +
+        geom_line() +
+        geom_point() +
+        theme_bw()
+
+m17 <- nrq.df.long %>% filter(gene == "m17")
+## reorder x axis
+m17$condition <- factor(m17$condition, levels = c("KOS", "WTS", "OXS"))
+ggplot(m17, aes(x = condition, y = NRQ, group = 1 )) + 
+        geom_errorbar(aes(ymin = NRQ - se, ymax = NRQ + se), width = 0.1) +
+        geom_line() +
+        geom_point() +
+        theme_bw()
+
+retro <- nrq.df.long %>% filter(gene == "retro")
+retro$condition <- factor(retro$condition, levels = c("KOS", "WTS", "OXS"))
+ggplot(retro, aes(x = condition, y = NRQ, group = 1 )) + 
+        geom_errorbar(aes(ymin = NRQ - se, ymax = NRQ + se), width = 0.1) +
+        geom_line() +
+        geom_point() +
+        theme_bw()
+
+sesa4 <- nrq.df.long %>% filter(gene == "sesa4")
+sesa4$condition <- factor(sesa4$condition, levels = c("KOS", "WTS", "OXS"))
+ggplot(sesa4, aes(x = condition, y = NRQ, group = 1 )) + 
+        geom_errorbar(aes(ymin = NRQ - se, ymax = NRQ + se), width = 0.1) +
+        geom_line() +
+        geom_point() +
+        theme_bw()
+
+sesa5 <- nrq.df.long %>% filter(gene == "sesa5")
+sesa5$condition <- factor(sesa5$condition, levels = c("KOS", "WTS", "OXS"))
+ggplot(sesa5, aes(x = condition, y = NRQ, group = 1 )) + 
+        geom_errorbar(aes(ymin = NRQ - se, ymax = NRQ + se), width = 0.1) +
+        geom_line() +
+        geom_point() +
+        theme_bw()
+```
+
